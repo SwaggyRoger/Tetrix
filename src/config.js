@@ -4,8 +4,13 @@
 export const BOARD = {
   cols: 10,
   rows: 20,
-  cellSize: 34, // px
+  cellSize: 34,    // px — the preferred size; shrunk at runtime to fit the window
+  minCellSize: 16, // px — never smaller than this, even on tiny windows
 };
+
+// Vertical page chrome around the board (title + paddings + frame border),
+// used to compute how much height is left for the board itself.
+export const PAGE_CHROME_PX = 150;
 
 // Milliseconds per gravity step for a given level (1-based).
 export function gravityMs(level) {

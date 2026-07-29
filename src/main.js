@@ -25,12 +25,39 @@ const gameApi = createGame({
   gravityMs: config.gravityMs,
 });
 
-const sprites = createSprites(config.PALETTE, config.BOARD.cellSize);
-const renderer = createRenderer({ boardCanvas, nextCanvas, holdCanvas, sprites, config });
+// The board must fit the window: shrink the cell size (and thus repaint the
+// sprites and resize every canvas) whenever the viewport demands it.
+const preferredCellSize = config.BOARD.cellSize;
 
-effectsCanvas.width = boardCanvas.width;
-effectsCanvas.height = boardCanvas.height;
-const particles = createParticles(effectsCanvas, config.EFFECTS);
+function fitCellSize() {
+  const available = window.innerHeight - config.PAGE_CHROME_PX;
+  const fit = Math.floor(available / config.BOARD.rows);
+  return Math.max(config.BOARD.minCellSize, Math.min(preferredCellSize, fit));
+}
+
+let sprites;
+let renderer;
+let particles;
+
+function buildRenderers() {
+  config.BOARD.cellSize = fitCellSize();
+  sprites = createSprites(config.PALETTE, config.BOARD.cellSize);
+  renderer = createRenderer({ boardCanvas, nextCanvas, holdCanvas, sprites, config });
+  effectsCanvas.width = boardCanvas.width;
+  effectsCanvas.height = boardCanvas.height;
+  particles = createParticles(effectsCanvas, config.EFFECTS);
+}
+
+buildRenderers();
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    buildRenderers();
+    renderer.draw(gameApi);
+  }, 150);
+});
 
 const hud = createHud();
 
