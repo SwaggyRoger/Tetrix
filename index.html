@@ -1,10 +1,175 @@
 <!DOCTYPE html>
+<!-- GENERATED FILE — do not edit. Edit src/, styles.css or dev.html, then run: node build.mjs -->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tetrix — An Impressionist Tetris</title>
-  <link rel="stylesheet" href="styles.css" />
+  <style>
+/* Page chrome only — everything inside the canvases is painted by JS.
+   Typography leans on serifs for the gallery / impressionist mood. */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  color: #4a4038;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#background {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+}
+
+.frame {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 24px 16px;
+}
+
+.stage {
+  text-align: center;
+}
+
+.stage h1 {
+  font-size: 2rem;
+  font-weight: normal;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+}
+
+.subtitle {
+  font-style: italic;
+  font-size: 0.9rem;
+  opacity: 0.7;
+  margin-bottom: 10px;
+}
+
+.board-wrap {
+  position: relative;
+  display: inline-block;
+  border: 10px solid #b9a382;
+  border-image: linear-gradient(135deg, #cbb48f, #a08a66, #cbb48f) 1;
+  box-shadow: 0 8px 30px rgba(74, 64, 56, 0.35);
+  background: #fcf9f0;
+}
+
+#board {
+  display: block;
+}
+
+#effects {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  background: rgba(252, 249, 240, 0.82);
+  backdrop-filter: blur(2px);
+}
+
+.overlay h2 {
+  font-size: 1.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: normal;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay button {
+  font-family: inherit;
+  font-size: 1rem;
+  letter-spacing: 0.15em;
+  padding: 10px 26px;
+  margin-top: 6px;
+  color: #4a4038;
+  background: rgba(252, 249, 240, 0.9);
+  border: 2px solid #a08a66;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.overlay button:hover {
+  background: #f2e3c0;
+  transform: scale(1.04);
+}
+
+.overlay .hint {
+  font-size: 0.8rem;
+  opacity: 0.65;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 150px;
+  padding-top: 78px;
+}
+
+.panel {
+  background: rgba(252, 249, 240, 0.75);
+  border: 1px solid rgba(160, 138, 102, 0.5);
+  box-shadow: 0 4px 14px rgba(74, 64, 56, 0.15);
+  padding: 12px;
+}
+
+.panel h2 {
+  font-size: 0.8rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  font-weight: normal;
+  opacity: 0.75;
+  margin-bottom: 6px;
+}
+
+.panel canvas {
+  display: block;
+  margin: 0 auto;
+}
+
+.stats .stat {
+  font-size: 1.3rem;
+  margin-bottom: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.controls dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  font-size: 0.78rem;
+}
+
+.controls dt {
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.controls dd {
+  opacity: 0.8;
+}
+</style>
 </head>
 <body>
   <canvas id="background"></canvas>
@@ -58,6 +223,1172 @@
     </aside>
   </main>
 
-  <script type="module" src="src/main.js"></script>
+  <script>
+'use strict';
+
+// ---- src/core/emitter.js ----
+const __m_core_emitter_js = (() => {
+// Minimal event emitter so core logic can announce events (line clears,
+// game over) without knowing about rendering or effects.
+
+function createEmitter() {
+  const listeners = new Map();
+  return {
+    on(event, fn) {
+      if (!listeners.has(event)) listeners.set(event, new Set());
+      listeners.get(event).add(fn);
+      return () => listeners.get(event).delete(fn);
+    },
+    emit(event, payload) {
+      const set = listeners.get(event);
+      if (set) for (const fn of set) fn(payload);
+    },
+  };
+}
+return { createEmitter };
+})();
+const { createEmitter } = __m_core_emitter_js;
+
+
+// ---- src/core/tetromino.js ----
+const __m_core_tetromino_js = (() => {
+// Tetromino definitions: base shapes, precomputed rotation states, and
+// SRS wall-kick tables. Pure data + pure functions — no DOM.
+
+const BASE_SHAPES = {
+  I: [
+    [0, 0, 0, 0],
+    [1, 1, 1, 1],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ],
+  J: [
+    [1, 0, 0],
+    [1, 1, 1],
+    [0, 0, 0],
+  ],
+  L: [
+    [0, 0, 1],
+    [1, 1, 1],
+    [0, 0, 0],
+  ],
+  O: [
+    [1, 1],
+    [1, 1],
+  ],
+  S: [
+    [0, 1, 1],
+    [1, 1, 0],
+    [0, 0, 0],
+  ],
+  T: [
+    [0, 1, 0],
+    [1, 1, 1],
+    [0, 0, 0],
+  ],
+  Z: [
+    [1, 1, 0],
+    [0, 1, 1],
+    [0, 0, 0],
+  ],
+};
+
+const TYPES = Object.keys(BASE_SHAPES); // ['I','J','L','O','S','T','Z']
+
+function rotateCW(matrix) {
+  const n = matrix.length;
+  const out = Array.from({ length: n }, () => Array(n).fill(0));
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) out[x][n - 1 - y] = matrix[y][x];
+  }
+  return out;
+}
+
+function cellsOf(matrix) {
+  const cells = [];
+  for (let y = 0; y < matrix.length; y++) {
+    for (let x = 0; x < matrix.length; x++) {
+      if (matrix[y][x]) cells.push([x, y]);
+    }
+  }
+  return cells;
+}
+
+// ROTATIONS[type][rot] = list of [x, y] offsets, rot in 0..3 (CW order).
+const ROTATIONS = {};
+const MATRIX_SIZE = {};
+for (const type of TYPES) {
+  let m = BASE_SHAPES[type];
+  MATRIX_SIZE[type] = m.length;
+  ROTATIONS[type] = [];
+  for (let r = 0; r < 4; r++) {
+    ROTATIONS[type].push(cellsOf(m));
+    m = rotateCW(m);
+  }
+}
+
+// SRS wall kicks, expressed in screen coordinates (y grows downward, so the
+// standard tables' y offsets are negated here). Key: `${from}>${to}`.
+const KICKS_JLSTZ = {
+  '0>1': [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]],
+  '1>0': [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
+  '1>2': [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
+  '2>1': [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]],
+  '2>3': [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]],
+  '3>2': [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]],
+  '3>0': [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]],
+  '0>3': [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]],
+};
+
+const KICKS_I = {
+  '0>1': [[0, 0], [-2, 0], [1, 0], [-2, 1], [1, -2]],
+  '1>0': [[0, 0], [2, 0], [-1, 0], [2, -1], [-1, 2]],
+  '1>2': [[0, 0], [-1, 0], [2, 0], [-1, -2], [2, 1]],
+  '2>1': [[0, 0], [1, 0], [-2, 0], [1, 2], [-2, -1]],
+  '2>3': [[0, 0], [2, 0], [-1, 0], [2, -1], [-1, 2]],
+  '3>2': [[0, 0], [-2, 0], [1, 0], [-2, 1], [1, -2]],
+  '3>0': [[0, 0], [1, 0], [-2, 0], [1, 2], [-2, -1]],
+  '0>3': [[0, 0], [-1, 0], [2, 0], [-1, -2], [2, 1]],
+};
+
+function kicksFor(type, fromRot, toRot) {
+  if (type === 'O') return [[0, 0]];
+  const table = type === 'I' ? KICKS_I : KICKS_JLSTZ;
+  return table[`${fromRot}>${toRot}`];
+}
+
+function spawnPosition(type, boardCols) {
+  const size = MATRIX_SIZE[type];
+  return {
+    x: Math.floor((boardCols - size) / 2),
+    y: type === 'I' ? -1 : 0,
+  };
+}
+return { TYPES, ROTATIONS, MATRIX_SIZE, kicksFor, spawnPosition };
+})();
+const { TYPES, ROTATIONS, MATRIX_SIZE, kicksFor, spawnPosition } = __m_core_tetromino_js;
+
+
+// ---- src/core/bag.js ----
+const __m_core_bag_js = (() => {
+// 7-bag randomizer: every 7 consecutive pieces contain each tetromino
+// exactly once. RNG is injectable so tests can be deterministic.
+
+
+function createBag(rng = Math.random) {
+  let bag = [];
+
+  function refill() {
+    bag = [...TYPES];
+    for (let i = bag.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [bag[i], bag[j]] = [bag[j], bag[i]];
+    }
+  }
+
+  return {
+    next() {
+      if (bag.length === 0) refill();
+      return bag.pop();
+    },
+  };
+}
+return { createBag };
+})();
+const { createBag } = __m_core_bag_js;
+
+
+// ---- src/core/board.js ----
+const __m_core_board_js = (() => {
+// The playfield grid. Cells hold either null or a tetromino type string
+// ('I'..'Z') — rendering decides what a type looks like.
+
+function createBoard(cols, rows) {
+  let grid = makeGrid(cols, rows);
+
+  function makeGrid(w, h) {
+    return Array.from({ length: h }, () => Array(w).fill(null));
+  }
+
+  return {
+    cols,
+    rows,
+    get grid() {
+      return grid;
+    },
+    cellAt(x, y) {
+      return y >= 0 ? grid[y][x] : null;
+    },
+    // cells: [x, y] offsets; px/py: piece origin. Cells above the top
+    // (y < 0) only collide with the side walls.
+    collides(cells, px, py) {
+      for (const [cx, cy] of cells) {
+        const x = px + cx;
+        const y = py + cy;
+        if (x < 0 || x >= cols || y >= rows) return true;
+        if (y >= 0 && grid[y][x] !== null) return true;
+      }
+      return false;
+    },
+    // Returns true if any merged cell landed above the visible field (top-out).
+    merge(cells, px, py, type) {
+      let topOut = false;
+      for (const [cx, cy] of cells) {
+        const x = px + cx;
+        const y = py + cy;
+        if (y < 0) {
+          topOut = true;
+          continue;
+        }
+        grid[y][x] = type;
+      }
+      return topOut;
+    },
+    fullRows() {
+      const rowsFound = [];
+      for (let y = 0; y < rows; y++) {
+        if (grid[y].every((c) => c !== null)) rowsFound.push(y);
+      }
+      return rowsFound;
+    },
+    clearRows(rowIndexes) {
+      const keep = grid.filter((_, y) => !rowIndexes.includes(y));
+      while (keep.length < rows) keep.unshift(Array(cols).fill(null));
+      grid = keep;
+    },
+    reset() {
+      grid = makeGrid(cols, rows);
+    },
+  };
+}
+return { createBoard };
+})();
+const { createBoard } = __m_core_board_js;
+
+
+// ---- src/core/game.js ----
+const __m_core_game_js = (() => {
+// Game state machine: spawning, gravity, lock delay, rotation with kicks,
+// scoring, levels, hold. Pure logic — drives everything via tick(dt) and
+// emits events; it never touches the DOM.
+
+
+const STATE = {
+  READY: 'ready', // waiting on the start screen; nothing moves until start()
+  PLAYING: 'playing',
+  PAUSED: 'paused',
+  GAME_OVER: 'gameover',
+};
+
+function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
+  const cols = boardCfg?.cols ?? 10;
+  const rows = boardCfg?.rows ?? 20;
+  const lockDelayMs = timing?.lockDelayMs ?? 500;
+  const score1 = scoring?.lineClear ?? { 1: 100, 2: 300, 3: 500, 4: 800 };
+  const softDropPerCell = scoring?.softDropPerCell ?? 1;
+  const hardDropPerCell = scoring?.hardDropPerCell ?? 2;
+  const linesPerLevel = scoring?.linesPerLevel ?? 10;
+  const gravityFn = gravityMs ?? ((level) => Math.max(1000 * 0.82 ** (level - 1), 55));
+
+  const board = createBoard(cols, rows);
+  const emitter = createEmitter();
+  let bag = createBag(rng);
+
+  const game = {
+    board,
+    state: STATE.READY,
+    piece: null, // { type, rot, x, y }
+    queue: [],
+    holdType: null,
+    canHold: true,
+    score: 0,
+    lines: 0,
+    level: 1,
+    on: emitter.on,
+  };
+
+  let gravityTimer = 0;
+  let lockTimer = 0;
+  let grounded = false;
+
+  function cellsOf(piece) {
+    return ROTATIONS[piece.type][piece.rot];
+  }
+
+  function refillQueue() {
+    while (game.queue.length < 3) game.queue.push(bag.next());
+  }
+
+  function spawn(type) {
+    const { x, y } = spawnPosition(type, cols);
+    const piece = { type, rot: 0, x, y };
+    if (board.collides(cellsOf(piece), x, y)) {
+      game.piece = piece; // leave it visible where it jammed
+      endGame();
+      return;
+    }
+    game.piece = piece;
+    gravityTimer = 0;
+    lockTimer = 0;
+    grounded = false;
+  }
+
+  function spawnNext() {
+    refillQueue();
+    spawn(game.queue.shift());
+    refillQueue();
+  }
+
+  function endGame() {
+    game.state = STATE.GAME_OVER;
+    emitter.emit('gameover', { score: game.score, lines: game.lines, level: game.level });
+  }
+
+  function tryMove(dx, dy) {
+    const p = game.piece;
+    if (!p) return false;
+    if (board.collides(cellsOf(p), p.x + dx, p.y + dy)) return false;
+    p.x += dx;
+    p.y += dy;
+    if (dx !== 0) lockTimer = 0; // successful shift resets lock delay
+    return true;
+  }
+
+  function isGrounded() {
+    const p = game.piece;
+    return board.collides(cellsOf(p), p.x, p.y + 1);
+  }
+
+  function lockPiece() {
+    const p = game.piece;
+    const topOut = board.merge(cellsOf(p), p.x, p.y, p.type);
+    emitter.emit('lock', { piece: { ...p } });
+    game.canHold = true;
+
+    const full = board.fullRows();
+    if (full.length > 0) {
+      const cells = [];
+      for (const y of full) {
+        for (let x = 0; x < cols; x++) cells.push({ x, y, type: board.cellAt(x, y) });
+      }
+      board.clearRows(full);
+      game.lines += full.length;
+      game.score += (score1[full.length] ?? 0) * game.level;
+      const newLevel = Math.floor(game.lines / linesPerLevel) + 1;
+      if (newLevel > game.level) {
+        game.level = newLevel;
+        emitter.emit('levelup', { level: newLevel });
+      }
+      emitter.emit('lineclear', { rows: full, count: full.length, cells });
+    }
+
+    if (topOut) {
+      endGame();
+      return;
+    }
+    spawnNext();
+  }
+
+  const api = {
+    get boardGrid() {
+      return board.grid;
+    },
+    start() {
+      if (game.state !== STATE.READY) return;
+      spawnNext();
+      game.state = STATE.PLAYING;
+    },
+    tick(dt) {
+      if (game.state !== STATE.PLAYING || !game.piece) return;
+      if (isGrounded()) {
+        grounded = true;
+        lockTimer += dt;
+        if (lockTimer >= lockDelayMs) lockPiece();
+        return;
+      }
+      if (grounded) {
+        // Walked off a ledge — falling again.
+        grounded = false;
+        lockTimer = 0;
+      }
+      gravityTimer += dt;
+      const step = gravityFn(game.level);
+      while (gravityTimer >= step) {
+        gravityTimer -= step;
+        if (!tryMove(0, 1)) break;
+      }
+    },
+    moveLeft() {
+      if (game.state === STATE.PLAYING) tryMove(-1, 0);
+    },
+    moveRight() {
+      if (game.state === STATE.PLAYING) tryMove(1, 0);
+    },
+    softDrop() {
+      if (game.state !== STATE.PLAYING) return;
+      if (tryMove(0, 1)) {
+        game.score += softDropPerCell;
+        gravityTimer = 0;
+      }
+    },
+    hardDrop() {
+      if (game.state !== STATE.PLAYING || !game.piece) return;
+      let dist = 0;
+      while (tryMove(0, 1)) dist++;
+      game.score += dist * hardDropPerCell;
+      lockPiece();
+    },
+    rotate(dir) {
+      // dir: 1 = CW, -1 = CCW
+      if (game.state !== STATE.PLAYING || !game.piece) return false;
+      const p = game.piece;
+      const toRot = (p.rot + dir + 4) % 4;
+      for (const [kx, ky] of kicksFor(p.type, p.rot, toRot)) {
+        if (!board.collides(ROTATIONS[p.type][toRot], p.x + kx, p.y + ky)) {
+          p.rot = toRot;
+          p.x += kx;
+          p.y += ky;
+          lockTimer = 0; // successful rotation resets lock delay
+          return true;
+        }
+      }
+      return false;
+    },
+    hold() {
+      if (game.state !== STATE.PLAYING || !game.canHold || !game.piece) return;
+      const current = game.piece.type;
+      game.canHold = false;
+      if (game.holdType === null) {
+        game.holdType = current;
+        spawnNext();
+      } else {
+        const swapped = game.holdType;
+        game.holdType = current;
+        spawn(swapped);
+      }
+    },
+    ghostY() {
+      const p = game.piece;
+      if (!p) return null;
+      let y = p.y;
+      while (!board.collides(cellsOf(p), p.x, y + 1)) y++;
+      return y;
+    },
+    togglePause() {
+      if (game.state === STATE.PLAYING) game.state = STATE.PAUSED;
+      else if (game.state === STATE.PAUSED) game.state = STATE.PLAYING;
+    },
+    reset() {
+      board.reset();
+      bag = createBag(rng);
+      game.queue = [];
+      game.holdType = null;
+      game.canHold = true;
+      game.score = 0;
+      game.lines = 0;
+      game.level = 1;
+      game.state = STATE.PLAYING;
+      spawnNext();
+    },
+    game,
+  };
+
+  return api;
+}
+return { STATE, createGame };
+})();
+const { STATE, createGame } = __m_core_game_js;
+
+
+// ---- src/config.js ----
+const __m_config_js = (() => {
+// All gameplay/visual tunables live here so collaborators can adjust
+// behaviour without touching logic. Keep this file dependency-free.
+
+const BOARD = {
+  cols: 10,
+  rows: 20,
+  cellSize: 34, // px
+};
+
+// Milliseconds per gravity step for a given level (1-based).
+function gravityMs(level) {
+  return Math.max(1000 * Math.pow(0.82, level - 1), 55);
+}
+
+const TIMING = {
+  lockDelayMs: 500,
+  dasMs: 170,       // delay before auto-repeat of left/right
+  arrMs: 40,        // auto-repeat rate of left/right
+  softDropMs: 40,   // soft-drop repeat rate while held
+};
+
+const SCORING = {
+  lineClear: { 1: 100, 2: 300, 3: 500, 4: 800 }, // multiplied by level
+  softDropPerCell: 1,
+  hardDropPerCell: 2,
+  linesPerLevel: 10,
+};
+
+// Monet-inspired palette: pond blues, wisteria, ochre, willow green, lilac, poppy.
+const PALETTE = {
+  I: '#5FA3B5',
+  J: '#7B85B8',
+  L: '#D9A15F',
+  O: '#E3C567',
+  S: '#8FAE6E',
+  T: '#B287B6',
+  Z: '#C9797B',
+};
+
+const CANVAS_STYLE = {
+  pageTop: '#f6f1e3',      // cream canvas
+  pageBottom: '#cfe0e4',   // pale pond blue
+  boardWash: 'rgba(252, 249, 240, 0.72)', // translucent panel over the painting
+  gridLine: 'rgba(90, 80, 70, 0.08)',
+  backgroundDabs: ['#cfe0e4', '#e8d8e0', '#dbe6c9', '#f2e3c0', '#c9d8ea', '#e6c9c9'],
+};
+
+const EFFECTS = {
+  particlesPerCell: 6,
+  heartColors: ['#e58fa2', '#d96d8a', '#f0b3c0', '#c9797b'],
+  starColors: ['#e9c46a', '#f4d58d', '#d9a15f', '#f7e8b0'],
+  particleTtlMs: [700, 1300], // min..max lifetime
+};
+
+const KEYS = {
+  left: ['ArrowLeft'],
+  right: ['ArrowRight'],
+  softDrop: ['ArrowDown'],
+  hardDrop: [' '],
+  rotateCW: ['ArrowUp', 'x', 'X'],
+  rotateCCW: ['z', 'Z'],
+  hold: ['c', 'C', 'Shift'],
+  pause: ['p', 'P', 'Escape'],
+  restart: ['r', 'R'],
+  start: ['Enter'],
+};
+return { BOARD, gravityMs, TIMING, SCORING, PALETTE, CANVAS_STYLE, EFFECTS, KEYS };
+})();
+const { BOARD, gravityMs, TIMING, SCORING, PALETTE, CANVAS_STYLE, EFFECTS, KEYS } = __m_config_js;
+const config = __m_config_js; // main.js uses 'import * as config'
+
+// ---- src/render/sprites.js ----
+const __m_render_sprites_js = (() => {
+// Impressionist cell sprites. Each tetromino colour is painted ONCE onto an
+// offscreen canvas as layers of short brush "dabs" with hue/light jitter,
+// then blitted every frame — painterly look at 60 fps.
+
+function hexToHsl(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (max === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+  }
+  return { h: h * 360, s: s * 100, l: l * 100 };
+}
+
+function hsla(h, s, l, a) {
+  return `hsla(${h}, ${clamp(s, 0, 100)}%, ${clamp(l, 0, 100)}%, ${a})`;
+}
+
+function clamp(v, lo, hi) {
+  return Math.min(hi, Math.max(lo, v));
+}
+
+function rand(lo, hi) {
+  return lo + Math.random() * (hi - lo);
+}
+
+function paintDabs(ctx, size, base, { count, alpha, lightShift = 0 }) {
+  for (let i = 0; i < count; i++) {
+    const len = rand(size * 0.18, size * 0.45);
+    const angle = -0.65 + rand(-0.5, 0.5); // diagonal stroke bias
+    const x = rand(size * 0.08, size * 0.92);
+    const y = rand(size * 0.08, size * 0.92);
+    ctx.strokeStyle = hsla(
+      base.h + rand(-12, 12),
+      base.s + rand(-14, 10),
+      base.l + lightShift + rand(-14, 14),
+      rand(alpha[0], alpha[1]),
+    );
+    ctx.lineWidth = rand(2, 4.2);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x - (Math.cos(angle) * len) / 2, y - (Math.sin(angle) * len) / 2);
+    ctx.lineTo(x + (Math.cos(angle) * len) / 2, y + (Math.sin(angle) * len) / 2);
+    ctx.stroke();
+  }
+}
+
+function paintCell(size, hex) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const base = hexToHsl(hex);
+
+  // Under-painting: a slightly muted wash of the base colour.
+  ctx.fillStyle = hsla(base.h, base.s * 0.8, base.l * 0.92, 1);
+  ctx.fillRect(0, 0, size, size);
+
+  // Body strokes, then light catching the top-left, shadow at bottom-right.
+  paintDabs(ctx, size, base, { count: 26, alpha: [0.2, 0.5] });
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, size * 0.65, size * 0.65);
+  ctx.clip();
+  paintDabs(ctx, size, base, { count: 8, alpha: [0.25, 0.5], lightShift: 18 });
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(size * 0.4, size * 0.4, size * 0.6, size * 0.6);
+  ctx.clip();
+  paintDabs(ctx, size, base, { count: 7, alpha: [0.2, 0.4], lightShift: -16 });
+  ctx.restore();
+
+  // A soft, hand-drawn edge instead of a hard border.
+  ctx.strokeStyle = hsla(base.h, base.s, base.l - 24, 0.35);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, size - 2, size - 2);
+  return canvas;
+}
+
+function paintGhost(size, hex) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const base = hexToHsl(hex);
+  ctx.fillStyle = hsla(base.h, base.s * 0.7, base.l, 0.12);
+  ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = hsla(base.h, base.s, base.l - 10, 0.4);
+  ctx.setLineDash([5, 4]);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(2, 2, size - 4, size - 4);
+  return canvas;
+}
+
+function createSprites(palette, cellSize) {
+  const cells = {};
+  const ghosts = {};
+  for (const [type, hex] of Object.entries(palette)) {
+    cells[type] = paintCell(cellSize, hex);
+    ghosts[type] = paintGhost(cellSize, hex);
+  }
+  return {
+    cell: (type) => cells[type],
+    ghost: (type) => ghosts[type],
+  };
+}
+return { createSprites };
+})();
+const { createSprites } = __m_render_sprites_js;
+
+
+// ---- src/render/background.js ----
+const __m_render_background_js = (() => {
+// Full-page Monet-style backdrop: a soft sky-to-pond gradient covered in
+// hundreds of translucent elliptical dabs. Painted once (and on resize).
+
+function rand(lo, hi) {
+  return lo + Math.random() * (hi - lo);
+}
+
+function paintBackground(canvas, style) {
+  const w = (canvas.width = window.innerWidth);
+  const h = (canvas.height = window.innerHeight);
+  const ctx = canvas.getContext('2d');
+
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, style.pageTop);
+  grad.addColorStop(1, style.pageBottom);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+
+  const dabCount = Math.round((w * h) / 3800);
+  for (let i = 0; i < dabCount; i++) {
+    const color = style.backgroundDabs[Math.floor(rand(0, style.backgroundDabs.length))];
+    ctx.save();
+    ctx.translate(rand(0, w), rand(0, h));
+    ctx.rotate(rand(-0.5, 0.5));
+    ctx.globalAlpha = rand(0.1, 0.32);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rand(10, 42), rand(5, 14), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function installBackground(canvas, style) {
+  paintBackground(canvas, style);
+  window.addEventListener('resize', () => paintBackground(canvas, style));
+}
+return { paintBackground, installBackground };
+})();
+const { paintBackground, installBackground } = __m_render_background_js;
+
+
+// ---- src/render/renderer.js ----
+const __m_render_renderer_js = (() => {
+// Per-frame drawing of the playfield, ghost piece, and the Next/Hold
+// previews. Knows nothing about game rules — it just reads game state.
+
+
+const PREVIEW_CELL = 20; // px per cell inside Next/Hold panels
+
+function createRenderer({ boardCanvas, nextCanvas, holdCanvas, sprites, config }) {
+  const { cols, rows, cellSize } = config.BOARD;
+  boardCanvas.width = cols * cellSize;
+  boardCanvas.height = rows * cellSize;
+  nextCanvas.width = 5 * PREVIEW_CELL;
+  nextCanvas.height = 10 * PREVIEW_CELL;
+  holdCanvas.width = 5 * PREVIEW_CELL;
+  holdCanvas.height = 3.4 * PREVIEW_CELL;
+
+  const ctx = boardCanvas.getContext('2d');
+  const nextCtx = nextCanvas.getContext('2d');
+  const holdCtx = holdCanvas.getContext('2d');
+
+  function drawSpriteCell(type, x, y, ghost = false) {
+    const sprite = ghost ? sprites.ghost(type) : sprites.cell(type);
+    ctx.drawImage(sprite, x * cellSize, y * cellSize);
+  }
+
+  function drawBoard(api) {
+    const { game } = api;
+    ctx.clearRect(0, 0, boardCanvas.width, boardCanvas.height);
+    ctx.fillStyle = config.CANVAS_STYLE.boardWash;
+    ctx.fillRect(0, 0, boardCanvas.width, boardCanvas.height);
+
+    ctx.strokeStyle = config.CANVAS_STYLE.gridLine;
+    ctx.lineWidth = 1;
+    for (let x = 1; x < cols; x++) {
+      ctx.beginPath();
+      ctx.moveTo(x * cellSize + 0.5, 0);
+      ctx.lineTo(x * cellSize + 0.5, boardCanvas.height);
+      ctx.stroke();
+    }
+    for (let y = 1; y < rows; y++) {
+      ctx.beginPath();
+      ctx.moveTo(0, y * cellSize + 0.5);
+      ctx.lineTo(boardCanvas.width, y * cellSize + 0.5);
+      ctx.stroke();
+    }
+
+    const grid = api.boardGrid;
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        if (grid[y][x]) drawSpriteCell(grid[y][x], x, y);
+      }
+    }
+
+    const piece = game.piece;
+    if (piece && game.state !== 'gameover') {
+      const cells = ROTATIONS[piece.type][piece.rot];
+      const gy = api.ghostY();
+      if (gy !== null && gy !== piece.y) {
+        for (const [cx, cy] of cells) {
+          if (gy + cy >= 0) drawSpriteCell(piece.type, piece.x + cx, gy + cy, true);
+        }
+      }
+      for (const [cx, cy] of cells) {
+        if (piece.y + cy >= 0) drawSpriteCell(piece.type, piece.x + cx, piece.y + cy);
+      }
+    }
+  }
+
+  function drawPreviewPiece(pctx, type, originY) {
+    const cells = ROTATIONS[type][0];
+    const size = MATRIX_SIZE[type];
+    // Trim to the occupied bounding box so every piece looks centred.
+    const xs = cells.map(([x]) => x);
+    const ys = cells.map(([, y]) => y);
+    const wCells = Math.max(...xs) - Math.min(...xs) + 1;
+    const hCells = Math.max(...ys) - Math.min(...ys) + 1;
+    const offsetX = (pctx.canvas.width - wCells * PREVIEW_CELL) / 2 - Math.min(...xs) * PREVIEW_CELL;
+    const sprite = sprites.cell(type);
+    for (const [cx, cy] of cells) {
+      pctx.drawImage(
+        sprite,
+        offsetX + cx * PREVIEW_CELL,
+        originY + (cy - Math.min(...ys)) * PREVIEW_CELL,
+        PREVIEW_CELL,
+        PREVIEW_CELL,
+      );
+    }
+    return hCells * PREVIEW_CELL;
+  }
+
+  function drawNext(api) {
+    nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+    let y = PREVIEW_CELL * 0.5;
+    for (const type of api.game.queue) {
+      y += drawPreviewPiece(nextCtx, type, y) + PREVIEW_CELL;
+    }
+  }
+
+  function drawHold(api) {
+    holdCtx.clearRect(0, 0, holdCanvas.width, holdCanvas.height);
+    if (api.game.holdType) {
+      holdCtx.globalAlpha = api.game.canHold ? 1 : 0.35;
+      drawPreviewPiece(holdCtx, api.game.holdType, PREVIEW_CELL * 0.5);
+      holdCtx.globalAlpha = 1;
+    }
+  }
+
+  return {
+    draw(api) {
+      drawBoard(api);
+      drawNext(api);
+      drawHold(api);
+    },
+  };
+}
+return { createRenderer };
+})();
+const { createRenderer } = __m_render_renderer_js;
+
+
+// ---- src/effects/particles.js ----
+const __m_effects_particles_js = (() => {
+// Heart & star particle bursts for line clears. Runs on its own overlay
+// canvas above the board so effects never dirty the playfield rendering.
+
+function rand(lo, hi) {
+  return lo + Math.random() * (hi - lo);
+}
+
+function pick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function heartPath(ctx, s) {
+  ctx.beginPath();
+  ctx.moveTo(0, s);
+  ctx.bezierCurveTo(-s, s * 0.4, -s * 0.9, -s * 0.6, 0, -s * 0.25);
+  ctx.bezierCurveTo(s * 0.9, -s * 0.6, s, s * 0.4, 0, s);
+  ctx.closePath();
+}
+
+function starPath(ctx, s) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? s : s * 0.45;
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const x = Math.cos(a) * r;
+    const y = Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+}
+
+function createParticles(canvas, effectsCfg) {
+  const ctx = canvas.getContext('2d');
+  let particles = [];
+
+  return {
+    get count() {
+      return particles.length;
+    },
+    // cells: [{x, y}] in board coordinates; cellSize: px.
+    burst(cells, cellSize) {
+      for (const cell of cells) {
+        for (let i = 0; i < effectsCfg.particlesPerCell; i++) {
+          const shape = Math.random() < 0.5 ? 'heart' : 'star';
+          particles.push({
+            shape,
+            color: pick(shape === 'heart' ? effectsCfg.heartColors : effectsCfg.starColors),
+            x: (cell.x + rand(0.2, 0.8)) * cellSize,
+            y: (cell.y + rand(0.2, 0.8)) * cellSize,
+            vx: rand(-70, 70),
+            vy: rand(-160, -40),
+            rot: rand(0, Math.PI * 2),
+            vr: rand(-3.5, 3.5),
+            size: rand(5, 12),
+            age: 0,
+            ttl: rand(effectsCfg.particleTtlMs[0], effectsCfg.particleTtlMs[1]),
+          });
+        }
+      }
+    },
+    update(dt) {
+      const s = dt / 1000;
+      for (const p of particles) {
+        p.age += dt;
+        p.x += p.vx * s;
+        p.y += p.vy * s;
+        p.vy += 140 * s; // gentle gravity so they float up then drift down
+        p.rot += p.vr * s;
+      }
+      particles = particles.filter((p) => p.age < p.ttl);
+    },
+    draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const p of particles) {
+        const life = 1 - p.age / p.ttl;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.globalAlpha = Math.min(1, life * 1.6);
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 8;
+        const size = p.size * (0.7 + 0.3 * life);
+        if (p.shape === 'heart') heartPath(ctx, size);
+        else starPath(ctx, size);
+        ctx.fill();
+        ctx.restore();
+      }
+    },
+  };
+}
+return { createParticles };
+})();
+const { createParticles } = __m_effects_particles_js;
+
+
+// ---- src/input/keyboard.js ----
+const __m_input_keyboard_js = (() => {
+// Keyboard input with DAS (delayed auto shift) for left/right and a fixed
+// repeat rate for soft drop. Actions are injected, so this module has no
+// dependency on game internals — easy to add touch/gamepad modules later.
+
+function createKeyboard({ keys, timing, actions }) {
+  const keyToAction = new Map();
+  for (const [action, list] of Object.entries(keys)) {
+    for (const k of list) keyToAction.set(k, action);
+  }
+
+  // Held state for auto-repeating actions.
+  const held = {
+    left: null,
+    right: null,
+    softDrop: null,
+  };
+
+  function onKeyDown(e) {
+    const action = keyToAction.get(e.key);
+    if (!action) return;
+    e.preventDefault();
+    if (e.repeat) return; // we do our own repeat
+
+    if (action in held) {
+      held[action] = { t: 0, repeatAcc: 0 };
+      actions[action](); // fire immediately on press
+    } else {
+      actions[action]();
+    }
+  }
+
+  function onKeyUp(e) {
+    const action = keyToAction.get(e.key);
+    if (action && action in held) held[action] = null;
+  }
+
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+
+  return {
+    // Call once per frame with elapsed ms.
+    update(dt) {
+      for (const dir of ['left', 'right']) {
+        const h = held[dir];
+        if (!h) continue;
+        h.t += dt;
+        if (h.t >= timing.dasMs) {
+          h.repeatAcc += dt;
+          while (h.repeatAcc >= timing.arrMs) {
+            h.repeatAcc -= timing.arrMs;
+            actions[dir]();
+          }
+        }
+      }
+      const sd = held.softDrop;
+      if (sd) {
+        sd.repeatAcc += dt;
+        while (sd.repeatAcc >= timing.softDropMs) {
+          sd.repeatAcc -= timing.softDropMs;
+          actions.softDrop();
+        }
+      }
+    },
+    destroy() {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    },
+  };
+}
+return { createKeyboard };
+})();
+const { createKeyboard } = __m_input_keyboard_js;
+
+
+// ---- src/ui/hud.js ----
+const __m_ui_hud_js = (() => {
+// HUD: score / lines / level readouts, pause & game-over overlay, and the
+// localStorage high score. Pure DOM bindings — no game logic.
+
+const STORAGE_KEY = 'tetrix.highscore';
+
+function createHud() {
+  const el = {
+    score: document.getElementById('stat-score'),
+    lines: document.getElementById('stat-lines'),
+    level: document.getElementById('stat-level'),
+    high: document.getElementById('stat-high'),
+    overlay: document.getElementById('overlay'),
+  };
+
+  let high = Number(localStorage.getItem(STORAGE_KEY) || 0);
+  el.high.textContent = high;
+
+  // Only rewrite the overlay when its content actually changes, so buttons
+  // inside it keep their identity (and hover/focus state) across frames.
+  let overlayKey = null;
+  function setOverlay(key, html) {
+    if (key === overlayKey) return;
+    overlayKey = key;
+    if (html) {
+      el.overlay.innerHTML = html;
+      el.overlay.classList.remove('hidden');
+    } else {
+      el.overlay.classList.add('hidden');
+    }
+  }
+
+  return {
+    update(api) {
+      const { game } = api;
+      el.score.textContent = game.score;
+      el.lines.textContent = game.lines;
+      el.level.textContent = game.level;
+      if (game.score > high) {
+        high = game.score;
+        el.high.textContent = high;
+      }
+      if (game.state === 'ready') {
+        setOverlay('ready', '<h2>Tetrix</h2><p>印象派俄羅斯方塊</p><button id="btn-start">Game Start</button><p class="hint">or press Enter · 或按 Enter</p>');
+      } else if (game.state === 'paused') {
+        setOverlay('paused', '<h2>Paused</h2><p>Press P to resume · 按 P 繼續</p>');
+      } else if (game.state === 'gameover') {
+        setOverlay(`gameover-${game.score}`, `<h2>Game Over</h2><p>Score ${game.score}</p><button id="btn-start">Play Again 再玩一次</button><p class="hint">or press R · 或按 R</p>`);
+      } else {
+        setOverlay(null, null);
+      }
+    },
+    saveHighScore(score) {
+      if (score >= high) localStorage.setItem(STORAGE_KEY, String(score));
+    },
+  };
+}
+return { createHud };
+})();
+const { createHud } = __m_ui_hud_js;
+
+
+// ---- src/main.js ----
+// Composition root: builds the game core, renderer, particles, input and
+// HUD, wires them together, and runs the requestAnimationFrame loop.
+// This is the ONLY file that knows about every module.
+
+
+const boardCanvas = document.getElementById('board');
+const effectsCanvas = document.getElementById('effects');
+const nextCanvas = document.getElementById('next');
+const holdCanvas = document.getElementById('hold');
+
+installBackground(document.getElementById('background'), config.CANVAS_STYLE);
+
+const gameApi = createGame({
+  board: config.BOARD,
+  timing: config.TIMING,
+  scoring: config.SCORING,
+  gravityMs: config.gravityMs,
+});
+
+const sprites = createSprites(config.PALETTE, config.BOARD.cellSize);
+const renderer = createRenderer({ boardCanvas, nextCanvas, holdCanvas, sprites, config });
+
+effectsCanvas.width = boardCanvas.width;
+effectsCanvas.height = boardCanvas.height;
+const particles = createParticles(effectsCanvas, config.EFFECTS);
+
+const hud = createHud();
+
+gameApi.game.on('lineclear', ({ cells }) => {
+  particles.burst(cells, config.BOARD.cellSize);
+});
+gameApi.game.on('gameover', ({ score }) => {
+  hud.saveHighScore(score);
+});
+
+// Start from the ready screen, or begin a fresh game after game over.
+function startOrRestart() {
+  if (gameApi.game.state === 'ready') gameApi.start();
+  else if (gameApi.game.state === 'gameover') gameApi.reset();
+}
+
+const keyboard = createKeyboard({
+  keys: config.KEYS,
+  timing: config.TIMING,
+  actions: {
+    left: () => gameApi.moveLeft(),
+    right: () => gameApi.moveRight(),
+    softDrop: () => gameApi.softDrop(),
+    hardDrop: () => gameApi.hardDrop(),
+    rotateCW: () => gameApi.rotate(1),
+    rotateCCW: () => gameApi.rotate(-1),
+    hold: () => gameApi.hold(),
+    pause: () => gameApi.togglePause(),
+    restart: () => {
+      if (gameApi.game.state !== 'ready') gameApi.reset();
+    },
+    start: startOrRestart,
+  },
+});
+
+document.getElementById('overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'btn-start') startOrRestart();
+});
+
+// Paint the first frame synchronously so the start screen is visible even
+// before requestAnimationFrame begins (e.g. hidden/backgrounded panes).
+renderer.draw(gameApi);
+hud.update(gameApi);
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(now - last, 100); // clamp huge tab-switch deltas
+  last = now;
+
+  keyboard.update(dt);
+  gameApi.tick(dt);
+  particles.update(dt);
+
+  renderer.draw(gameApi);
+  particles.draw();
+  hud.update(gameApi);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Debug/testing handle (used by automated verification; harmless in prod).
+window.__tetrix = { gameApi, particles, renderer, hud, config };
+</script>
 </body>
 </html>

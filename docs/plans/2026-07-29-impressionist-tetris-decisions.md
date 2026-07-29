@@ -35,3 +35,18 @@ single-line clear at 6/cell). One test-authoring fix during Verify: the forced
 I-piece x-coordinate in two tests was off by one (piece origin vs occupied
 columns). Debug handle `window.__tetrix` was extended with `renderer`/`hud` to
 allow manual frame driving when the browser pane isn't compositing (rAF paused).
+
+## Amendment (2026-07-29, same day): start screen + double-clickable index.html
+
+User feedback after first release:
+1. Double-clicking `index.html` must work (it didn't — `file://` blocks ES modules).
+2. The game must NOT auto-start; add a **Game Start** button.
+
+| Decision | Choice | Why |
+|---|---|---|
+| file:// support | `build.mjs` — zero-dependency ~90-line bundler that inlines src/ + styles.css into a generated single-file `index.html`; module entry renamed to `dev.html` | Keeps the modular testable source AND gives a double-clickable artifact. Constraint added: modules may only use `export function/const NAME`. |
+| Start gate | New `STATE.READY` in core; `start()` API; overlay start screen with button + Enter key | Pure-core change stays testable; HUD renders the button; main.js wires it. |
+| First frame | Painted synchronously before the rAF loop | Start screen visible even if the pane isn't compositing yet. |
+
+Verified: 14/14 unit tests; headless-Chrome screenshot of `file:///C:/Claude/tetrix/index.html`
+shows the start screen; button click and Enter both transition ready→playing in a real page.

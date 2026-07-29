@@ -8,6 +8,7 @@ import { createEmitter } from './emitter.js';
 import { ROTATIONS, kicksFor, spawnPosition } from './tetromino.js';
 
 export const STATE = {
+  READY: 'ready', // waiting on the start screen; nothing moves until start()
   PLAYING: 'playing',
   PAUSED: 'paused',
   GAME_OVER: 'gameover',
@@ -29,7 +30,7 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
 
   const game = {
     board,
-    state: STATE.PLAYING,
+    state: STATE.READY,
     piece: null, // { type, rot, x, y }
     queue: [],
     holdType: null,
@@ -126,6 +127,11 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
     get boardGrid() {
       return board.grid;
     },
+    start() {
+      if (game.state !== STATE.READY) return;
+      spawnNext();
+      game.state = STATE.PLAYING;
+    },
     tick(dt) {
       if (game.state !== STATE.PLAYING || !game.piece) return;
       if (isGrounded()) {
@@ -221,6 +227,5 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
     game,
   };
 
-  spawnNext();
   return api;
 }

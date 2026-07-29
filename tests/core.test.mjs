@@ -63,14 +63,31 @@ test('board collision: walls, floor, and stack', () => {
 });
 
 function makeGame(overrides = {}) {
-  return createGame({
+  const api = createGame({
     board: { cols: 10, rows: 20 },
     rng: seededRng(),
     ...overrides,
   });
+  api.start();
+  return api;
 }
 
-test('game spawns with a 3-piece preview queue', () => {
+test('game waits on the ready screen until start() is called', () => {
+  const api = createGame({ rng: seededRng() });
+  assert.equal(api.game.state, 'ready');
+  assert.equal(api.game.piece, null);
+  api.tick(10000); // gravity must not run before start
+  assert.equal(api.game.piece, null);
+  api.hardDrop(); // inputs are ignored before start
+  assert.equal(api.game.score, 0);
+  api.start();
+  assert.equal(api.game.state, 'playing');
+  assert.ok(api.game.piece);
+  api.start(); // calling again is a no-op, not a re-spawn
+  assert.equal(api.game.queue.length, 3);
+});
+
+test('game spawns with a 3-piece preview queue after start', () => {
   const api = makeGame();
   assert.ok(api.game.piece);
   assert.equal(api.game.queue.length, 3);

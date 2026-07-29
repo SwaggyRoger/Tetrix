@@ -15,7 +15,12 @@ export function createHud() {
   let high = Number(localStorage.getItem(STORAGE_KEY) || 0);
   el.high.textContent = high;
 
-  function setOverlay(html) {
+  // Only rewrite the overlay when its content actually changes, so buttons
+  // inside it keep their identity (and hover/focus state) across frames.
+  let overlayKey = null;
+  function setOverlay(key, html) {
+    if (key === overlayKey) return;
+    overlayKey = key;
     if (html) {
       el.overlay.innerHTML = html;
       el.overlay.classList.remove('hidden');
@@ -34,12 +39,14 @@ export function createHud() {
         high = game.score;
         el.high.textContent = high;
       }
-      if (game.state === 'paused') {
-        setOverlay('<h2>Paused</h2><p>Press P to resume · 按 P 繼續</p>');
+      if (game.state === 'ready') {
+        setOverlay('ready', '<h2>Tetrix</h2><p>印象派俄羅斯方塊</p><button id="btn-start">Game Start</button><p class="hint">or press Enter · 或按 Enter</p>');
+      } else if (game.state === 'paused') {
+        setOverlay('paused', '<h2>Paused</h2><p>Press P to resume · 按 P 繼續</p>');
       } else if (game.state === 'gameover') {
-        setOverlay(`<h2>Game Over</h2><p>Score ${game.score}</p><p>Press R to restart · 按 R 重新開始</p>`);
+        setOverlay(`gameover-${game.score}`, `<h2>Game Over</h2><p>Score ${game.score}</p><button id="btn-start">Play Again 再玩一次</button><p class="hint">or press R · 或按 R</p>`);
       } else {
-        setOverlay(null);
+        setOverlay(null, null);
       }
     },
     saveHighScore(score) {

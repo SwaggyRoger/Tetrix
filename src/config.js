@@ -62,4 +62,5 @@ export const KEYS = {
   hold: ['c', 'C', 'Shift'],
   pause: ['p', 'P', 'Escape'],
   restart: ['r', 'R'],
+  start: ['Enter'],
 };

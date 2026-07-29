@@ -41,6 +41,12 @@ gameApi.game.on('gameover', ({ score }) => {
   hud.saveHighScore(score);
 });
 
+// Start from the ready screen, or begin a fresh game after game over.
+function startOrRestart() {
+  if (gameApi.game.state === 'ready') gameApi.start();
+  else if (gameApi.game.state === 'gameover') gameApi.reset();
+}
+
 const keyboard = createKeyboard({
   keys: config.KEYS,
   timing: config.TIMING,
@@ -53,9 +59,21 @@ const keyboard = createKeyboard({
     rotateCCW: () => gameApi.rotate(-1),
     hold: () => gameApi.hold(),
     pause: () => gameApi.togglePause(),
-    restart: () => gameApi.reset(),
+    restart: () => {
+      if (gameApi.game.state !== 'ready') gameApi.reset();
+    },
+    start: startOrRestart,
   },
 });
+
+document.getElementById('overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'btn-start') startOrRestart();
+});
+
+// Paint the first frame synchronously so the start screen is visible even
+// before requestAnimationFrame begins (e.g. hidden/backgrounded panes).
+renderer.draw(gameApi);
+hud.update(gameApi);
 
 let last = performance.now();
 function frame(now) {
