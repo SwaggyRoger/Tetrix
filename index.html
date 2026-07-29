@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tetrix — An Impressionist Tetris</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <canvas id="background"></canvas>
+
+  <main class="frame">
+    <aside class="side">
+      <section class="panel">
+        <h2>Hold</h2>
+        <canvas id="hold"></canvas>
+      </section>
+      <section class="panel controls">
+        <h2>Controls</h2>
+        <dl>
+          <dt>← →</dt><dd>Move 移動</dd>
+          <dt>↑ / X</dt><dd>Rotate 旋轉</dd>
+          <dt>Z</dt><dd>Rotate ↺</dd>
+          <dt>↓</dt><dd>Soft drop 緩降</dd>
+          <dt>Space</dt><dd>Hard drop 直落</dd>
+          <dt>C</dt><dd>Hold 保留</dd>
+          <dt>P</dt><dd>Pause 暫停</dd>
+          <dt>R</dt><dd>Restart 重來</dd>
+        </dl>
+      </section>
+    </aside>
+
+    <section class="stage">
+      <h1>Tetrix</h1>
+      <p class="subtitle">an impressionist tetris</p>
+      <div class="board-wrap">
+        <canvas id="board"></canvas>
+        <canvas id="effects"></canvas>
+        <div id="overlay" class="overlay hidden"></div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <section class="panel">
+        <h2>Next</h2>
+        <canvas id="next"></canvas>
+      </section>
+      <section class="panel stats">
+        <h2>Score</h2>
+        <p class="stat" id="stat-score">0</p>
+        <h2>Level</h2>
+        <p class="stat" id="stat-level">1</p>
+        <h2>Lines</h2>
+        <p class="stat" id="stat-lines">0</p>
+        <h2>Best</h2>
+        <p class="stat" id="stat-high">0</p>
+      </section>
+    </aside>
+  </main>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

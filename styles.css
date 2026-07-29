@@ -1,0 +1,140 @@
+/* Page chrome only — everything inside the canvases is painted by JS.
+   Typography leans on serifs for the gallery / impressionist mood. */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  color: #4a4038;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#background {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+}
+
+.frame {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 24px 16px;
+}
+
+.stage {
+  text-align: center;
+}
+
+.stage h1 {
+  font-size: 2rem;
+  font-weight: normal;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+}
+
+.subtitle {
+  font-style: italic;
+  font-size: 0.9rem;
+  opacity: 0.7;
+  margin-bottom: 10px;
+}
+
+.board-wrap {
+  position: relative;
+  display: inline-block;
+  border: 10px solid #b9a382;
+  border-image: linear-gradient(135deg, #cbb48f, #a08a66, #cbb48f) 1;
+  box-shadow: 0 8px 30px rgba(74, 64, 56, 0.35);
+  background: #fcf9f0;
+}
+
+#board {
+  display: block;
+}
+
+#effects {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  background: rgba(252, 249, 240, 0.82);
+  backdrop-filter: blur(2px);
+}
+
+.overlay h2 {
+  font-size: 1.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: normal;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 150px;
+  padding-top: 78px;
+}
+
+.panel {
+  background: rgba(252, 249, 240, 0.75);
+  border: 1px solid rgba(160, 138, 102, 0.5);
+  box-shadow: 0 4px 14px rgba(74, 64, 56, 0.15);
+  padding: 12px;
+}
+
+.panel h2 {
+  font-size: 0.8rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  font-weight: normal;
+  opacity: 0.75;
+  margin-bottom: 6px;
+}
+
+.panel canvas {
+  display: block;
+  margin: 0 auto;
+}
+
+.stats .stat {
+  font-size: 1.3rem;
+  margin-bottom: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.controls dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  font-size: 0.78rem;
+}
+
+.controls dt {
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.controls dd {
+  opacity: 0.8;
+}

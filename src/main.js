@@ -1,0 +1,78 @@
+// Composition root: builds the game core, renderer, particles, input and
+// HUD, wires them together, and runs the requestAnimationFrame loop.
+// This is the ONLY file that knows about every module.
+
+import * as config from './config.js';
+import { createGame } from './core/game.js';
+import { createSprites } from './render/sprites.js';
+import { createRenderer } from './render/renderer.js';
+import { installBackground } from './render/background.js';
+import { createParticles } from './effects/particles.js';
+import { createKeyboard } from './input/keyboard.js';
+import { createHud } from './ui/hud.js';
+
+const boardCanvas = document.getElementById('board');
+const effectsCanvas = document.getElementById('effects');
+const nextCanvas = document.getElementById('next');
+const holdCanvas = document.getElementById('hold');
+
+installBackground(document.getElementById('background'), config.CANVAS_STYLE);
+
+const gameApi = createGame({
+  board: config.BOARD,
+  timing: config.TIMING,
+  scoring: config.SCORING,
+  gravityMs: config.gravityMs,
+});
+
+const sprites = createSprites(config.PALETTE, config.BOARD.cellSize);
+const renderer = createRenderer({ boardCanvas, nextCanvas, holdCanvas, sprites, config });
+
+effectsCanvas.width = boardCanvas.width;
+effectsCanvas.height = boardCanvas.height;
+const particles = createParticles(effectsCanvas, config.EFFECTS);
+
+const hud = createHud();
+
+gameApi.game.on('lineclear', ({ cells }) => {
+  particles.burst(cells, config.BOARD.cellSize);
+});
+gameApi.game.on('gameover', ({ score }) => {
+  hud.saveHighScore(score);
+});
+
+const keyboard = createKeyboard({
+  keys: config.KEYS,
+  timing: config.TIMING,
+  actions: {
+    left: () => gameApi.moveLeft(),
+    right: () => gameApi.moveRight(),
+    softDrop: () => gameApi.softDrop(),
+    hardDrop: () => gameApi.hardDrop(),
+    rotateCW: () => gameApi.rotate(1),
+    rotateCCW: () => gameApi.rotate(-1),
+    hold: () => gameApi.hold(),
+    pause: () => gameApi.togglePause(),
+    restart: () => gameApi.reset(),
+  },
+});
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(now - last, 100); // clamp huge tab-switch deltas
+  last = now;
+
+  keyboard.update(dt);
+  gameApi.tick(dt);
+  particles.update(dt);
+
+  renderer.draw(gameApi);
+  particles.draw();
+  hud.update(gameApi);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Debug/testing handle (used by automated verification; harmless in prod).
+window.__tetrix = { gameApi, particles, renderer, hud, config };
