@@ -15,6 +15,13 @@ import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
+// Normalize to LF on read: with git's autocrlf a fresh Windows checkout has
+// CRLF files, and every line-anchored regex below assumes \n endings. Without
+// this, a Windows clone generates a subtly different index.html.
+function read(...segments) {
+  return readFileSync(join(root, ...segments), 'utf8').replace(/\r\n/g, '\n');
+}
+
 // Dependency order: core first, then config, then the browser-facing layers.
 const MODULES = [
   'core/emitter.js',
@@ -32,7 +39,7 @@ const MODULES = [
 ];
 
 function bundleModule(relPath) {
-  const src = readFileSync(join(root, 'src', relPath), 'utf8');
+  const src = read('src', relPath);
   const exportNames = [...src.matchAll(/^export (?:function|const) ([A-Za-z0-9_$]+)/gm)].map(
     (m) => m[1],
   );
@@ -66,15 +73,14 @@ for (const m of MODULES) {
   bundle += part + '\n';
 }
 
-bundle +=
-  '// ---- src/main.js ----\n' + readFileSync(join(root, 'src/main.js'), 'utf8').replace(/^import .*\n?/gm, '');
+bundle += '// ---- src/main.js ----\n' + read('src/main.js').replace(/^import .*\n?/gm, '');
 
 if (bundle.includes('</script>')) {
   throw new Error('bundle would break the inline <script> tag');
 }
 
-const dev = readFileSync(join(root, 'dev.html'), 'utf8');
-const css = readFileSync(join(root, 'styles.css'), 'utf8');
+const dev = read('dev.html');
+const css = read('styles.css');
 
 let html = dev
   .replace('<!DOCTYPE html>', () => '<!DOCTYPE html>\n<!-- GENERATED FILE — do not edit. Edit src/, styles.css or dev.html, then run: node build.mjs -->')

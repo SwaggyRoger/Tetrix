@@ -1,0 +1,11 @@
+# Keep text files LF in the working tree on every platform. build.mjs
+# additionally normalizes on read, but consistent checkouts mean the
+# generated index.html is byte-identical no matter who builds it.
+* text=auto
+*.js text eol=lf
+*.mjs text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.png binary
