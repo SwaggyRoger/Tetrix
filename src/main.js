@@ -10,6 +10,7 @@ import { installBackground } from './render/background.js';
 import { createParticles } from './effects/particles.js';
 import { createKeyboard } from './input/keyboard.js';
 import { createHud } from './ui/hud.js';
+import { loadSkin } from './assets/loader.js';
 
 const boardCanvas = document.getElementById('board');
 const effectsCanvas = document.getElementById('effects');
@@ -38,10 +39,11 @@ function fitCellSize() {
 let sprites;
 let renderer;
 let particles;
+let skinImages = {}; // filled in later if assets/manifest.js names a usable skin
 
 function buildRenderers() {
   config.BOARD.cellSize = fitCellSize();
-  sprites = createSprites(config.PALETTE, config.BOARD.cellSize);
+  sprites = createSprites(config.PALETTE, config.BOARD.cellSize, skinImages);
   renderer = createRenderer({ boardCanvas, nextCanvas, holdCanvas, sprites, config });
   effectsCanvas.width = boardCanvas.width;
   effectsCanvas.height = boardCanvas.height;
@@ -49,6 +51,16 @@ function buildRenderers() {
 }
 
 buildRenderers();
+
+// External artwork is an upgrade, never a gate: the painted sprites are already
+// on screen, and we only repaint once (and if) the images actually arrive.
+loadSkin().then(({ skinName, images }) => {
+  if (Object.keys(images).length === 0) return;
+  skinImages = images;
+  buildRenderers();
+  renderer.draw(gameApi);
+  console.info(`[tetrix/assets] skin "${skinName}" applied (${Object.keys(images).length} pieces)`);
+});
 
 let resizeTimer = null;
 window.addEventListener('resize', () => {

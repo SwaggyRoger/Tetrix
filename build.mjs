@@ -30,6 +30,7 @@ const MODULES = [
   'core/board.js',
   'core/game.js',
   'config.js',
+  'assets/loader.js',
   'render/sprites.js',
   'render/background.js',
   'render/renderer.js',

@@ -103,12 +103,46 @@ function paintGhost(size, hex) {
   return canvas;
 }
 
-export function createSprites(palette, cellSize) {
+// An external image scaled into one cell. Kept as its own offscreen canvas so
+// the per-frame draw stays a plain blit, exactly like the painted sprites.
+function blitImage(size, img) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, size, size);
+  return canvas;
+}
+
+function imageGhost(size, img) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.globalAlpha = 0.22;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, size, size);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = 'rgba(90, 80, 70, 0.4)';
+  ctx.setLineDash([5, 4]);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(2, 2, size - 4, size - 4);
+  return canvas;
+}
+
+// `images` is an optional { type: HTMLImageElement } map from src/assets/loader.js.
+// Any type absent from it keeps the built-in impressionist painting, so a
+// partial or empty skin is a valid state rather than an error.
+export function createSprites(palette, cellSize, images = {}) {
   const cells = {};
   const ghosts = {};
   for (const [type, hex] of Object.entries(palette)) {
-    cells[type] = paintCell(cellSize, hex);
-    ghosts[type] = paintGhost(cellSize, hex);
+    const img = images[type];
+    cells[type] = img ? blitImage(cellSize, img) : paintCell(cellSize, hex);
+    ghosts[type] = img ? imageGhost(cellSize, img) : paintGhost(cellSize, hex);
   }
   return {
     cell: (type) => cells[type],
