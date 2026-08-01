@@ -57,6 +57,51 @@ export const EFFECTS = {
   particleTtlMs: [700, 1300], // min..max lifetime
 };
 
+// Impressionist sound. Everything is synthesised at runtime from these numbers
+// — no audio files needed — so pitch is an exact parameter rather than a
+// playback-rate hack. Harmony is built on a pentatonic/whole-tone colour
+// (Debussy's palette): soft attacks, long decays, nothing that resolves hard.
+//
+// `semitones` are offsets from `rootHz`. Read the `clears` table top to bottom
+// and you can see the requested "solemnity" gradient in the numbers: the root
+// drops an octave, voices are added, and attack/decay both stretch out.
+export const AUDIO = {
+  enabled: true,
+  masterVolume: 0.45,
+  rootHz: 277.18, // C#4 — the black-key pentatonic everything is transposed from
+  comboSemitonesPerStep: 2, // whole-tone step per extra combo; keeps the colour
+  maxComboSteps: 6,         // stop transposing up beyond this, or it turns shrill
+  reverb: { seconds: 2.6, decay: 2.4, mix: 0.34 },
+
+  // Soft landing: a barely-there tap so ordinary play is not noisy.
+  lock: { semitones: [12], attack: 0.004, decay: 0.2, gain: 0.09, type: 'triangle' },
+
+  // "Urgent" hard drop: fast downward glide plus a short noise impact — dry and
+  // percussive, deliberately the opposite of the washy line-clear chords.
+  hardDrop: {
+    fromSemitone: 15,
+    toSemitone: -5,
+    attack: 0.002,
+    glideMs: 90,
+    decay: 0.32,
+    gain: 0.3,
+    type: 'sawtooth',
+    noiseGain: 0.16,
+    noiseDecay: 0.16,
+  },
+
+  // Line clears: 1 = light shimmer high up, 4 = low, wide and slow to fade.
+  clears: {
+    1: { semitones: [12, 16], attack: 0.01, decay: 1.0, gain: 0.3, type: 'sine', spreadMs: 25 },
+    2: { semitones: [7, 12, 16], attack: 0.018, decay: 1.5, gain: 0.36, type: 'sine', spreadMs: 35 },
+    3: { semitones: [0, 7, 12, 19], attack: 0.03, decay: 2.1, gain: 0.42, type: 'triangle', spreadMs: 45 },
+    4: { semitones: [-12, -5, 0, 7, 12, 19], attack: 0.055, decay: 3.2, gain: 0.5, type: 'triangle', spreadMs: 60 },
+  },
+
+  levelUp: { semitones: [0, 4, 7, 12, 16], attack: 0.012, decay: 1.6, gain: 0.26, type: 'sine', spreadMs: 70 },
+  gameOver: { semitones: [0, -2, -4, -8], attack: 0.06, decay: 2.8, gain: 0.3, type: 'sine', spreadMs: 220 },
+};
+
 export const KEYS = {
   left: ['ArrowLeft'],
   right: ['ArrowRight'],
@@ -68,4 +113,5 @@ export const KEYS = {
   pause: ['p', 'P', 'Escape'],
   restart: ['r', 'R'],
   start: ['Enter'],
+  mute: ['m', 'M'],
 };

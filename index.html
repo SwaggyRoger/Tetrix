@@ -191,6 +191,7 @@ body {
           <dt>C</dt><dd>Hold 保留</dd>
           <dt>P</dt><dd>Pause 暫停</dd>
           <dt>R</dt><dd>Restart 重來</dd>
+          <dt>M</dt><dd>Mute 靜音</dd>
           <dt>Enter</dt><dd>Start 開始</dd>
         </dl>
       </section>
@@ -220,6 +221,8 @@ body {
         <p class="stat" id="stat-lines">0</p>
         <h2>Best</h2>
         <p class="stat" id="stat-high">0</p>
+        <h2>Sound</h2>
+        <p class="stat" id="stat-sound">On</p>
       </section>
     </aside>
   </main>
@@ -227,6 +230,9 @@ body {
   <!-- Optional custom artwork. Plain (non-module) script so it works from
        file:// in the generated index.html too — see assets/README.md. -->
   <script src="assets/manifest.js"></script>
+  <!-- Optional sound overrides — independent of the artwork manifest above.
+       Sound is synthesised by default, so this file may name nothing at all. -->
+  <script src="assets/audio/manifest.js"></script>
   <script>
 'use strict';
 
@@ -508,6 +514,11 @@ function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
     score: 0,
     lines: 0,
     level: 1,
+    // Consecutive locks that cleared at least one row. 1 on the first clear,
+    // 2 on the next one in a row, back to 0 as soon as a piece locks without
+    // clearing. Carried on the `lineclear` event so presentation layers can
+    // react to a run without tracking state of their own.
+    combo: 0,
     on: emitter.on,
   };
 
@@ -577,13 +588,16 @@ function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
       }
       board.clearRows(full);
       game.lines += full.length;
+      game.combo += 1;
       game.score += (score1[full.length] ?? 0) * game.level;
       const newLevel = Math.floor(game.lines / linesPerLevel) + 1;
       if (newLevel > game.level) {
         game.level = newLevel;
         emitter.emit('levelup', { level: newLevel });
       }
-      emitter.emit('lineclear', { rows: full, count: full.length, cells });
+      emitter.emit('lineclear', { rows: full, count: full.length, cells, combo: game.combo });
+    } else {
+      game.combo = 0;
     }
 
     if (topOut) {
@@ -640,6 +654,9 @@ function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
       let dist = 0;
       while (tryMove(0, 1)) dist++;
       game.score += dist * hardDropPerCell;
+      // Announced before the lock so a listener can sound the impact ahead of
+      // any line-clear cue it triggers.
+      emitter.emit('harddrop', { distance: dist, type: game.piece.type });
       lockPiece();
     },
     rotate(dir) {
@@ -691,6 +708,7 @@ function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
       game.score = 0;
       game.lines = 0;
       game.level = 1;
+      game.combo = 0;
       game.state = STATE.PLAYING;
       spawnNext();
     },
@@ -765,6 +783,51 @@ const EFFECTS = {
   particleTtlMs: [700, 1300], // min..max lifetime
 };
 
+// Impressionist sound. Everything is synthesised at runtime from these numbers
+// — no audio files needed — so pitch is an exact parameter rather than a
+// playback-rate hack. Harmony is built on a pentatonic/whole-tone colour
+// (Debussy's palette): soft attacks, long decays, nothing that resolves hard.
+//
+// `semitones` are offsets from `rootHz`. Read the `clears` table top to bottom
+// and you can see the requested "solemnity" gradient in the numbers: the root
+// drops an octave, voices are added, and attack/decay both stretch out.
+const AUDIO = {
+  enabled: true,
+  masterVolume: 0.45,
+  rootHz: 277.18, // C#4 — the black-key pentatonic everything is transposed from
+  comboSemitonesPerStep: 2, // whole-tone step per extra combo; keeps the colour
+  maxComboSteps: 6,         // stop transposing up beyond this, or it turns shrill
+  reverb: { seconds: 2.6, decay: 2.4, mix: 0.34 },
+
+  // Soft landing: a barely-there tap so ordinary play is not noisy.
+  lock: { semitones: [12], attack: 0.004, decay: 0.2, gain: 0.09, type: 'triangle' },
+
+  // "Urgent" hard drop: fast downward glide plus a short noise impact — dry and
+  // percussive, deliberately the opposite of the washy line-clear chords.
+  hardDrop: {
+    fromSemitone: 15,
+    toSemitone: -5,
+    attack: 0.002,
+    glideMs: 90,
+    decay: 0.32,
+    gain: 0.3,
+    type: 'sawtooth',
+    noiseGain: 0.16,
+    noiseDecay: 0.16,
+  },
+
+  // Line clears: 1 = light shimmer high up, 4 = low, wide and slow to fade.
+  clears: {
+    1: { semitones: [12, 16], attack: 0.01, decay: 1.0, gain: 0.3, type: 'sine', spreadMs: 25 },
+    2: { semitones: [7, 12, 16], attack: 0.018, decay: 1.5, gain: 0.36, type: 'sine', spreadMs: 35 },
+    3: { semitones: [0, 7, 12, 19], attack: 0.03, decay: 2.1, gain: 0.42, type: 'triangle', spreadMs: 45 },
+    4: { semitones: [-12, -5, 0, 7, 12, 19], attack: 0.055, decay: 3.2, gain: 0.5, type: 'triangle', spreadMs: 60 },
+  },
+
+  levelUp: { semitones: [0, 4, 7, 12, 16], attack: 0.012, decay: 1.6, gain: 0.26, type: 'sine', spreadMs: 70 },
+  gameOver: { semitones: [0, -2, -4, -8], attack: 0.06, decay: 2.8, gain: 0.3, type: 'sine', spreadMs: 220 },
+};
+
 const KEYS = {
   left: ['ArrowLeft'],
   right: ['ArrowRight'],
@@ -776,10 +839,11 @@ const KEYS = {
   pause: ['p', 'P', 'Escape'],
   restart: ['r', 'R'],
   start: ['Enter'],
+  mute: ['m', 'M'],
 };
-return { BOARD, PAGE_CHROME_PX, gravityMs, TIMING, SCORING, PALETTE, CANVAS_STYLE, EFFECTS, KEYS };
+return { BOARD, PAGE_CHROME_PX, gravityMs, TIMING, SCORING, PALETTE, CANVAS_STYLE, EFFECTS, AUDIO, KEYS };
 })();
-const { BOARD, PAGE_CHROME_PX, gravityMs, TIMING, SCORING, PALETTE, CANVAS_STYLE, EFFECTS, KEYS } = __m_config_js;
+const { BOARD, PAGE_CHROME_PX, gravityMs, TIMING, SCORING, PALETTE, CANVAS_STYLE, EFFECTS, AUDIO, KEYS } = __m_config_js;
 const config = __m_config_js; // main.js uses 'import * as config'
 
 // ---- src/assets/loader.js ----
@@ -921,6 +985,407 @@ const loadSkin = async (rawManifest, console_ = console) => {
 return { PIECE_TYPES, MANIFEST_VERSION, ASSET_GLOBAL, validateManifest, loadSkin };
 })();
 const { PIECE_TYPES, MANIFEST_VERSION, ASSET_GLOBAL, validateManifest, loadSkin } = __m_assets_loader_js;
+
+
+// ---- src/audio/synth.js ----
+const __m_audio_synth_js = (() => {
+// Impressionist synthesiser. Every sound is built from oscillators at runtime,
+// so there are no audio files to ship and pitch is an exact parameter — which
+// is what makes "higher pitch on higher combo" a real transposition rather than
+// a sped-up sample.
+//
+// The scheduling functions take a context and a destination rather than owning
+// them, so the exact same graph can be rendered into an OfflineAudioContext and
+// measured. That is how the sound design is verified — see docs/plans/.
+
+// Convert a semitone offset from the root into a frequency.
+function semitoneHz(rootHz, semitones) {
+  return rootHz * Math.pow(2, semitones / 12);
+}
+
+// A decaying noise burst used as a reverb impulse response: cheap, and it gives
+// the wash of tone that the painted visuals ask for.
+function createReverbImpulse(ctx, seconds, decay) {
+  const length = Math.max(1, Math.floor(ctx.sampleRate * seconds));
+  const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buffer.getChannelData(ch);
+    for (let i = 0; i < length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+    }
+  }
+  return buffer;
+}
+
+// Soft attack, long exponential tail. Never rings a hard edge.
+function envelope(ctx, at, attack, decay, peak) {
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, at);
+  gain.gain.linearRampToValueAtTime(Math.max(peak, 0.0002), at + attack);
+  gain.gain.exponentialRampToValueAtTime(0.0001, at + attack + decay);
+  return gain;
+}
+
+// A voicing: one oscillator per semitone, entries staggered by `spreadMs` so
+// the chord blooms rather than lands as a block.
+// Returns the time the cue finishes.
+function scheduleChord(ctx, destination, spec, { rootHz, at, semitoneShift = 0, velocity = 1 }) {
+  const start = at ?? ctx.currentTime;
+  const spread = (spec.spreadMs ?? 0) / 1000;
+  let end = start;
+  spec.semitones.forEach((semi, i) => {
+    const t = start + i * spread;
+    const osc = ctx.createOscillator();
+    osc.type = spec.type ?? 'sine';
+    osc.frequency.setValueAtTime(semitoneHz(rootHz, semi + semitoneShift), t);
+    // A touch of detune keeps stacked voices from sounding electronically exact.
+    osc.detune.setValueAtTime((i % 2 === 0 ? 1 : -1) * 4, t);
+    const gain = envelope(ctx, t, spec.attack, spec.decay, (spec.gain * velocity) / spec.semitones.length);
+    osc.connect(gain).connect(destination);
+    osc.start(t);
+    osc.stop(t + spec.attack + spec.decay + 0.05);
+    end = Math.max(end, t + spec.attack + spec.decay);
+  });
+  return end;
+}
+
+// The urgent one: a fast downward glide plus a filtered noise thud.
+function scheduleGlide(ctx, destination, spec, { rootHz, at, velocity = 1 }) {
+  const start = at ?? ctx.currentTime;
+  const osc = ctx.createOscillator();
+  osc.type = spec.type ?? 'sawtooth';
+  osc.frequency.setValueAtTime(semitoneHz(rootHz, spec.fromSemitone), start);
+  osc.frequency.exponentialRampToValueAtTime(
+    semitoneHz(rootHz, spec.toSemitone),
+    start + (spec.glideMs ?? 90) / 1000,
+  );
+  // Roll the top off so the sawtooth reads as urgency, not harshness.
+  const tone = ctx.createBiquadFilter();
+  tone.type = 'lowpass';
+  tone.frequency.setValueAtTime(2600, start);
+  const gain = envelope(ctx, start, spec.attack, spec.decay, spec.gain * velocity);
+  osc.connect(tone).connect(gain).connect(destination);
+  osc.start(start);
+  osc.stop(start + spec.attack + spec.decay + 0.05);
+
+  if (spec.noiseGain) {
+    const length = Math.max(1, Math.floor(ctx.sampleRate * (spec.noiseDecay ?? 0.15)));
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const thud = ctx.createBiquadFilter();
+    thud.type = 'lowpass';
+    thud.frequency.setValueAtTime(900, start);
+    const noiseGain = envelope(ctx, start, 0.001, spec.noiseDecay ?? 0.15, spec.noiseGain * velocity);
+    src.connect(thud).connect(noiseGain).connect(destination);
+    src.start(start);
+  }
+  return start + spec.attack + spec.decay;
+}
+
+// Builds the shared graph — master gain, a softening lowpass, and a reverb send
+// — on any context. Returns the node cues should connect to.
+function createBus(ctx, cfg) {
+  const master = ctx.createGain();
+  master.gain.value = cfg.masterVolume;
+
+  const soften = ctx.createBiquadFilter();
+  soften.type = 'lowpass';
+  soften.frequency.value = 5200;
+
+  const dry = ctx.createGain();
+  dry.gain.value = 1 - cfg.reverb.mix;
+  const wet = ctx.createGain();
+  wet.gain.value = cfg.reverb.mix;
+
+  const convolver = ctx.createConvolver();
+  convolver.buffer = createReverbImpulse(ctx, cfg.reverb.seconds, cfg.reverb.decay);
+
+  const input = ctx.createGain();
+  input.connect(dry).connect(soften);
+  input.connect(convolver).connect(wet).connect(soften);
+  soften.connect(master).connect(ctx.destination);
+
+  return { input, master };
+}
+
+// Live wrapper: owns a real AudioContext, created lazily on the first user
+// gesture because browsers refuse to start audio before one.
+function createSynth(cfg) {
+  let ctx = null;
+  let bus = null;
+  let muted = false;
+
+  function ensure() {
+    if (ctx) return true;
+    const Ctor = globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (!Ctor) return false; // no Web Audio (very old browser) — stay silent
+    ctx = new Ctor();
+    bus = createBus(ctx, cfg);
+    return true;
+  }
+
+  return {
+    get ready() {
+      return ctx !== null && ctx.state === 'running';
+    },
+    get muted() {
+      return muted;
+    },
+    // Must be called from a user gesture (the Game Start button / a keypress).
+    resume() {
+      if (!ensure()) return;
+      if (ctx.state === 'suspended') ctx.resume();
+    },
+    setMuted(value) {
+      muted = value;
+      if (bus) bus.master.gain.value = value ? 0 : cfg.masterVolume;
+    },
+    chord(spec, opts = {}) {
+      if (muted || !ensure() || ctx.state !== 'running') return;
+      scheduleChord(ctx, bus.input, spec, { rootHz: cfg.rootHz, at: ctx.currentTime, ...opts });
+    },
+    glide(spec, opts = {}) {
+      if (muted || !ensure() || ctx.state !== 'running') return;
+      scheduleGlide(ctx, bus.input, spec, { rootHz: cfg.rootHz, at: ctx.currentTime, ...opts });
+    },
+  };
+}
+return { semitoneHz, createReverbImpulse, scheduleChord, scheduleGlide, createBus, createSynth };
+})();
+const { semitoneHz, createReverbImpulse, scheduleChord, scheduleGlide, createBus, createSynth } = __m_audio_synth_js;
+
+
+// ---- src/audio/loader.js ----
+const __m_audio_loader_js = (() => {
+// Optional audio overrides. Everything is synthesised by default, so this layer
+// exists purely so someone can drop real recordings in later without touching
+// code. It reads `window.TETRIX_AUDIO`, set by assets/audio/manifest.js.
+//
+// Deliberately independent of src/assets/loader.js: different folder, different
+// manifest, different global. Swapping artwork must never disturb sound and vice
+// versa. The two share a shape on purpose — one mental model, two subsystems.
+//
+// Files are loaded through <audio> elements rather than fetch + decodeAudioData
+// because fetch is blocked on file://, where the double-clickable index.html runs.
+
+const AUDIO_CUES = ['lock', 'hardDrop', 'clear1', 'clear2', 'clear3', 'clear4', 'levelUp', 'gameOver'];
+
+const AUDIO_MANIFEST_VERSION = 1;
+
+const AUDIO_GLOBAL = 'TETRIX_AUDIO';
+
+const SAMPLE_TIMEOUT_MS = 10000;
+
+// Pure — no DOM — so the loud-vs-quiet rules are unit-tested in Node.
+// Returns { set: { name, cues } | null, errors: [], warnings: [] }.
+// A null set means "synthesise everything", which is the normal default.
+function validateAudioManifest(raw) {
+  const errors = [];
+  const warnings = [];
+  const fail = (msg) => {
+    errors.push(msg);
+    return { set: null, errors, warnings };
+  };
+
+  if (raw === undefined || raw === null) return { set: null, errors, warnings };
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    return fail(`audio manifest must be an object, got ${Array.isArray(raw) ? 'array' : typeof raw}`);
+  }
+  if (raw.version !== AUDIO_MANIFEST_VERSION) {
+    return fail(
+      `audio manifest version ${JSON.stringify(raw.version)} is not supported (expected ${AUDIO_MANIFEST_VERSION})`,
+    );
+  }
+
+  const active = raw.activeSet;
+  if (active === undefined || active === null) return { set: null, errors, warnings };
+  if (typeof active !== 'string') {
+    return fail(`activeSet must be a string or null, got ${typeof active}`);
+  }
+
+  const sets = raw.sets;
+  if (sets === undefined || sets === null || typeof sets !== 'object' || Array.isArray(sets)) {
+    return fail(`activeSet is "${active}" but "sets" is missing or not an object`);
+  }
+  const set = sets[active];
+  if (set === undefined) {
+    const available = Object.keys(sets);
+    return fail(
+      `activeSet "${active}" is not defined in "sets" (available: ${available.length ? available.join(', ') : 'none'})`,
+    );
+  }
+  if (typeof set !== 'object' || set === null || Array.isArray(set)) {
+    return fail(`sets["${active}"] must be an object`);
+  }
+  if (typeof set.cues !== 'object' || set.cues === null || Array.isArray(set.cues)) {
+    return fail(`sets["${active}"].cues must be an object mapping cue name -> file path`);
+  }
+
+  const cues = {};
+  for (const cue of AUDIO_CUES) {
+    const path = set.cues[cue];
+    if (path === undefined || path === null) continue; // silently synthesised
+    if (typeof path !== 'string' || path.trim() === '') {
+      warnings.push(`set "${active}": cues.${cue} must be a non-empty path string — ignored`);
+      continue;
+    }
+    cues[cue] = path.trim();
+  }
+  for (const key of Object.keys(set.cues)) {
+    if (!AUDIO_CUES.includes(key)) {
+      warnings.push(`set "${active}": cues.${key} is not a cue name (${AUDIO_CUES.join(' ')}) — ignored`);
+    }
+  }
+  if (Object.keys(cues).length === 0) {
+    warnings.push(`set "${active}" names no usable files — every cue stays synthesised`);
+  }
+
+  return { set: { name: active, cues }, errors, warnings };
+}
+
+function loadSample(path) {
+  return new Promise((resolve) => {
+    const el = new Audio();
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => done(null), SAMPLE_TIMEOUT_MS);
+    el.addEventListener('canplaythrough', () => done(el), { once: true });
+    el.addEventListener('error', () => done(null), { once: true });
+    el.preload = 'auto';
+    el.src = path;
+    el.load();
+  });
+}
+
+// (`export const` rather than `export async function`: build.mjs only detects
+// the `export function` / `export const` forms — see README design rule 6.)
+const loadAudioSet = async (rawManifest, console_ = console) => {
+  const raw = rawManifest !== undefined ? rawManifest : globalThis[AUDIO_GLOBAL];
+  const { set, errors, warnings } = validateAudioManifest(raw);
+
+  for (const e of errors) console_.error(`[tetrix/audio] ${e} — every cue stays synthesised`);
+  for (const w of warnings) console_.warn(`[tetrix/audio] ${w}`);
+  if (!set) return { setName: null, samples: {} };
+
+  const entries = Object.entries(set.cues);
+  const loaded = await Promise.all(entries.map(([, path]) => loadSample(path)));
+
+  const samples = {};
+  entries.forEach(([cue, path], i) => {
+    if (loaded[i]) samples[cue] = loaded[i];
+    else console_.warn(`[tetrix/audio] could not load "${path}" for cue ${cue} — synthesised instead`);
+  });
+  return { setName: set.name, samples };
+};
+return { AUDIO_CUES, AUDIO_MANIFEST_VERSION, AUDIO_GLOBAL, validateAudioManifest, loadAudioSet };
+})();
+const { AUDIO_CUES, AUDIO_MANIFEST_VERSION, AUDIO_GLOBAL, validateAudioManifest, loadAudioSet } = __m_audio_loader_js;
+
+
+// ---- src/audio/sound.js ----
+const __m_audio_sound_js = (() => {
+// Maps game events to cues. This is the only file that knows what a "line
+// clear" should sound like; synth.js knows how to make a sound, loader.js knows
+// where optional files live, and core/ knows nothing about any of it.
+
+// How far up to transpose for a combo run. The first clear of a run is
+// unshifted; each consecutive one steps up, capped so it never turns shrill.
+function comboShift(cfg, combo) {
+  const steps = Math.min(Math.max(combo - 1, 0), cfg.maxComboSteps);
+  return steps * cfg.comboSemitonesPerStep;
+}
+
+function createSound({ cfg, synth, samples = {}, storage = globalThis.localStorage }) {
+  let muted = false;
+  // A hard drop emits `harddrop` immediately followed by `lock`. The slam
+  // already contains its own impact, so the settle tick would only muddy it.
+  let skipNextLock = false;
+  try {
+    muted = storage?.getItem('tetrix.muted') === '1';
+  } catch {
+    muted = false; // private browsing / storage disabled — just start unmuted
+  }
+  synth.setMuted(muted);
+
+  // An override file replaces the synthesised cue. Pitch still moves with the
+  // combo, but via playbackRate, which also shortens the sample — unavoidable
+  // without a full pitch-shifter, and documented in assets/audio/README.md.
+  function playSample(el, semitoneShift, velocity) {
+    const node = el.cloneNode();
+    node.volume = Math.min(1, cfg.masterVolume * velocity);
+    node.playbackRate = Math.pow(2, semitoneShift / 12);
+    const played = node.play();
+    if (played && typeof played.catch === 'function') played.catch(() => {});
+  }
+
+  function cue(name, spec, { semitoneShift = 0, velocity = 1, glide = false } = {}) {
+    if (muted) return;
+    const sample = samples[name];
+    if (sample) {
+      playSample(sample, semitoneShift, velocity);
+      return;
+    }
+    if (glide) synth.glide(spec, { velocity });
+    else synth.chord(spec, { semitoneShift, velocity });
+  }
+
+  return {
+    get muted() {
+      return muted;
+    },
+    // Browsers will not start audio outside a user gesture; call this from the
+    // start button and from keydown.
+    resume() {
+      synth.resume();
+    },
+    setMuted(value) {
+      muted = value;
+      synth.setMuted(value);
+      try {
+        storage?.setItem('tetrix.muted', value ? '1' : '0');
+      } catch {
+        /* storage unavailable — the setting just won't persist */
+      }
+    },
+    toggleMute() {
+      this.setMuted(!muted);
+      return muted;
+    },
+    onLock() {
+      if (skipNextLock) {
+        skipNextLock = false;
+        return;
+      }
+      cue('lock', cfg.lock);
+    },
+    onHardDrop({ distance = 0 } = {}) {
+      skipNextLock = true;
+      // A longer fall reads as a heavier landing.
+      cue('hardDrop', cfg.hardDrop, { velocity: 0.6 + 0.4 * Math.min(distance / 18, 1), glide: true });
+    },
+    onLineClear({ count = 1, combo = 1 } = {}) {
+      const spec = cfg.clears[Math.min(Math.max(count, 1), 4)];
+      cue(`clear${Math.min(Math.max(count, 1), 4)}`, spec, { semitoneShift: comboShift(cfg, combo) });
+    },
+    onLevelUp() {
+      cue('levelUp', cfg.levelUp);
+    },
+    onGameOver() {
+      cue('gameOver', cfg.gameOver);
+    },
+  };
+}
+return { comboShift, createSound };
+})();
+const { comboShift, createSound } = __m_audio_sound_js;
 
 
 // ---- src/render/sprites.js ----
@@ -1434,6 +1899,7 @@ function createHud() {
     lines: document.getElementById('stat-lines'),
     level: document.getElementById('stat-level'),
     high: document.getElementById('stat-high'),
+    sound: document.getElementById('stat-sound'),
     overlay: document.getElementById('overlay'),
   };
 
@@ -1476,6 +1942,11 @@ function createHud() {
     },
     saveHighScore(score) {
       if (score >= high) localStorage.setItem(STORAGE_KEY, String(score));
+    },
+    // Reflects the mute toggle (M). Guarded so the HUD still works if the
+    // markup predates the sound panel.
+    showMuted(muted) {
+      if (el.sound) el.sound.textContent = muted ? 'Off 靜音' : 'On';
     },
   };
 }
@@ -1551,17 +2022,45 @@ window.addEventListener('resize', () => {
 
 const hud = createHud();
 
-gameApi.game.on('lineclear', ({ cells }) => {
-  particles.burst(cells, config.BOARD.cellSize);
+// Sound is synthesised, so it needs no files and is ready immediately. The
+// samples object is filled in later only if assets/audio/manifest.js names
+// overrides; createSound holds the reference, so cues switch over in place.
+const audioSamples = {};
+const synth = createSynth(config.AUDIO);
+const sound = createSound({ cfg: config.AUDIO, synth, samples: audioSamples });
+
+hud.showMuted(sound.muted);
+
+loadAudioSet().then(({ setName, samples }) => {
+  const names = Object.keys(samples);
+  if (names.length === 0) return;
+  Object.assign(audioSamples, samples);
+  console.info(`[tetrix/audio] set "${setName}" applied (${names.join(', ')})`);
 });
+
+gameApi.game.on('lineclear', ({ cells, count, combo }) => {
+  particles.burst(cells, config.BOARD.cellSize);
+  sound.onLineClear({ count, combo });
+});
+gameApi.game.on('harddrop', ({ distance }) => sound.onHardDrop({ distance }));
+gameApi.game.on('lock', () => sound.onLock());
+gameApi.game.on('levelup', () => sound.onLevelUp());
 gameApi.game.on('gameover', ({ score }) => {
   hud.saveHighScore(score);
+  sound.onGameOver();
 });
 
 // Start from the ready screen, or begin a fresh game after game over.
 function startOrRestart() {
+  sound.resume(); // browsers only allow audio to start from a user gesture
   if (gameApi.game.state === 'ready') gameApi.start();
   else if (gameApi.game.state === 'gameover') gameApi.reset();
+}
+
+// Any interaction counts as the gesture, so sound also works for a player who
+// starts with Enter or dives straight into the keyboard.
+for (const evt of ['keydown', 'pointerdown']) {
+  window.addEventListener(evt, () => sound.resume(), { once: true });
 }
 
 const keyboard = createKeyboard({
@@ -1580,6 +2079,7 @@ const keyboard = createKeyboard({
       if (gameApi.game.state !== 'ready') gameApi.reset();
     },
     start: startOrRestart,
+    mute: () => hud.showMuted(sound.toggleMute()),
   },
 });
 
@@ -1610,7 +2110,17 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // Debug/testing handle (used by automated verification; harmless in prod).
-window.__tetrix = { gameApi, particles, renderer, hud, config };
+// The audio entry exposes the schedulers so cues can be rendered into an
+// OfflineAudioContext and measured — that is how the sound design is verified.
+window.__tetrix = {
+  gameApi,
+  particles,
+  renderer,
+  hud,
+  config,
+  sound,
+  audio: { synth, scheduleChord, scheduleGlide, createBus, semitoneHz, comboShift },
+};
 </script>
 </body>
 </html>

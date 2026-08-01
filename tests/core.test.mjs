@@ -165,6 +165,58 @@ test('stacking to the top ends the game', () => {
   assert.equal(api.game.state, 'gameover');
 });
 
+// Fills row 19 except cols 3..6 so a flat I dropped at x=3 completes it.
+function armSingleClear(api) {
+  const grid = api.boardGrid;
+  for (let x = 0; x < 10; x++) if (x < 3 || x > 6) grid[19][x] = 'J';
+  api.game.piece = { type: 'I', rot: 0, x: 3, y: 0 };
+}
+
+test('combo counts consecutive clearing locks and resets on a dry lock', () => {
+  const api = makeGame();
+  const combos = [];
+  api.game.on('lineclear', (e) => combos.push(e.combo));
+
+  armSingleClear(api);
+  api.hardDrop();
+  assert.equal(api.game.combo, 1, 'first clear starts the run at 1');
+
+  armSingleClear(api);
+  api.hardDrop();
+  assert.equal(api.game.combo, 2, 'second consecutive clear continues the run');
+
+  // A lock that clears nothing breaks the run.
+  api.game.piece = { type: 'O', rot: 0, x: 0, y: 0 };
+  api.hardDrop();
+  assert.equal(api.game.combo, 0, 'a lock without a clear ends the combo');
+
+  armSingleClear(api);
+  api.hardDrop();
+  assert.equal(api.game.combo, 1, 'the next clear starts a fresh run');
+
+  assert.deepEqual(combos, [1, 2, 1], 'every lineclear event carries the combo');
+});
+
+test('hard drop emits its own event with the fall distance', () => {
+  const api = makeGame();
+  const drops = [];
+  api.game.on('harddrop', (e) => drops.push(e));
+  api.game.piece = { type: 'O', rot: 0, x: 4, y: 0 };
+  api.hardDrop();
+  assert.equal(drops.length, 1);
+  assert.ok(drops[0].distance > 0, 'distance is how far the piece fell');
+  assert.equal(drops[0].type, 'O');
+});
+
+test('reset clears an in-progress combo', () => {
+  const api = makeGame();
+  armSingleClear(api);
+  api.hardDrop();
+  assert.equal(api.game.combo, 1);
+  api.reset();
+  assert.equal(api.game.combo, 0);
+});
+
 test('reset returns to a clean playable state', () => {
   const api = makeGame();
   for (let i = 0; i < 60; i++) api.hardDrop();

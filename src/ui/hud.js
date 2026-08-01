@@ -9,6 +9,7 @@ export function createHud() {
     lines: document.getElementById('stat-lines'),
     level: document.getElementById('stat-level'),
     high: document.getElementById('stat-high'),
+    sound: document.getElementById('stat-sound'),
     overlay: document.getElementById('overlay'),
   };
 
@@ -51,6 +52,11 @@ export function createHud() {
     },
     saveHighScore(score) {
       if (score >= high) localStorage.setItem(STORAGE_KEY, String(score));
+    },
+    // Reflects the mute toggle (M). Guarded so the HUD still works if the
+    // markup predates the sound panel.
+    showMuted(muted) {
+      if (el.sound) el.sound.textContent = muted ? 'Off 靜音' : 'On';
     },
   };
 }

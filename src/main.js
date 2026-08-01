@@ -11,6 +11,9 @@ import { createParticles } from './effects/particles.js';
 import { createKeyboard } from './input/keyboard.js';
 import { createHud } from './ui/hud.js';
 import { loadSkin } from './assets/loader.js';
+import { createSynth, scheduleChord, scheduleGlide, createBus, semitoneHz } from './audio/synth.js';
+import { createSound, comboShift } from './audio/sound.js';
+import { loadAudioSet } from './audio/loader.js';
 
 const boardCanvas = document.getElementById('board');
 const effectsCanvas = document.getElementById('effects');
@@ -73,17 +76,45 @@ window.addEventListener('resize', () => {
 
 const hud = createHud();
 
-gameApi.game.on('lineclear', ({ cells }) => {
-  particles.burst(cells, config.BOARD.cellSize);
+// Sound is synthesised, so it needs no files and is ready immediately. The
+// samples object is filled in later only if assets/audio/manifest.js names
+// overrides; createSound holds the reference, so cues switch over in place.
+const audioSamples = {};
+const synth = createSynth(config.AUDIO);
+const sound = createSound({ cfg: config.AUDIO, synth, samples: audioSamples });
+
+hud.showMuted(sound.muted);
+
+loadAudioSet().then(({ setName, samples }) => {
+  const names = Object.keys(samples);
+  if (names.length === 0) return;
+  Object.assign(audioSamples, samples);
+  console.info(`[tetrix/audio] set "${setName}" applied (${names.join(', ')})`);
 });
+
+gameApi.game.on('lineclear', ({ cells, count, combo }) => {
+  particles.burst(cells, config.BOARD.cellSize);
+  sound.onLineClear({ count, combo });
+});
+gameApi.game.on('harddrop', ({ distance }) => sound.onHardDrop({ distance }));
+gameApi.game.on('lock', () => sound.onLock());
+gameApi.game.on('levelup', () => sound.onLevelUp());
 gameApi.game.on('gameover', ({ score }) => {
   hud.saveHighScore(score);
+  sound.onGameOver();
 });
 
 // Start from the ready screen, or begin a fresh game after game over.
 function startOrRestart() {
+  sound.resume(); // browsers only allow audio to start from a user gesture
   if (gameApi.game.state === 'ready') gameApi.start();
   else if (gameApi.game.state === 'gameover') gameApi.reset();
+}
+
+// Any interaction counts as the gesture, so sound also works for a player who
+// starts with Enter or dives straight into the keyboard.
+for (const evt of ['keydown', 'pointerdown']) {
+  window.addEventListener(evt, () => sound.resume(), { once: true });
 }
 
 const keyboard = createKeyboard({
@@ -102,6 +133,7 @@ const keyboard = createKeyboard({
       if (gameApi.game.state !== 'ready') gameApi.reset();
     },
     start: startOrRestart,
+    mute: () => hud.showMuted(sound.toggleMute()),
   },
 });
 
@@ -132,4 +164,14 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // Debug/testing handle (used by automated verification; harmless in prod).
-window.__tetrix = { gameApi, particles, renderer, hud, config };
+// The audio entry exposes the schedulers so cues can be rendered into an
+// OfflineAudioContext and measured — that is how the sound design is verified.
+window.__tetrix = {
+  gameApi,
+  particles,
+  renderer,
+  hud,
+  config,
+  sound,
+  audio: { synth, scheduleChord, scheduleGlide, createBus, semitoneHz, comboShift },
+};
