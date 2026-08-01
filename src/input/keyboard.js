@@ -2,11 +2,34 @@
 // repeat rate for soft drop. Actions are injected, so this module has no
 // dependency on game internals — easy to add touch/gamepad modules later.
 
-export function createKeyboard({ keys, timing, actions }) {
-  const keyToAction = new Map();
+// Builds the lookup used to turn a keydown into an action.
+//
+// Matching on `event.key` alone is not enough. With an IME active (注音, kana,
+// pinyin…) a letter keydown reports `key === 'Process'`, so nothing matched
+// until the player forced a real letter through with Shift — which is why the
+// shortcuts appeared to need capitals. `event.code` is the physical key and is
+// unaffected by the IME, by Caps Lock, or by which case was produced, so every
+// single-character binding also registers its code ('c' → 'KeyC', ' ' → 'Space').
+//
+// Pure and export-only so it can be unit-tested in Node without a DOM.
+export function buildKeyMap(keys) {
+  const map = new Map();
   for (const [action, list] of Object.entries(keys)) {
-    for (const k of list) keyToAction.set(k, action);
+    for (const k of list) {
+      map.set(k, action);
+      if (k.length !== 1) continue;
+      map.set(k.toLowerCase(), action);
+      map.set(k.toUpperCase(), action);
+      if (/[a-z]/i.test(k)) map.set(`Key${k.toUpperCase()}`, action);
+      else if (k === ' ') map.set('Space', action);
+      else if (/[0-9]/.test(k)) map.set(`Digit${k}`, action);
+    }
   }
+  return map;
+}
+
+export function createKeyboard({ keys, timing, actions }) {
+  const keyToAction = buildKeyMap(keys);
 
   // Held state for auto-repeating actions.
   const held = {
@@ -15,8 +38,14 @@ export function createKeyboard({ keys, timing, actions }) {
     softDrop: null,
   };
 
+  // `key` first so named keys (ArrowLeft, Enter, Shift) win; `code` is the
+  // fallback that survives an IME, Caps Lock, and either letter case.
+  function actionFor(e) {
+    return keyToAction.get(e.key) ?? keyToAction.get(e.code);
+  }
+
   function onKeyDown(e) {
-    const action = keyToAction.get(e.key);
+    const action = actionFor(e);
     if (!action) return;
     e.preventDefault();
     if (e.repeat) return; // we do our own repeat
@@ -30,7 +59,7 @@ export function createKeyboard({ keys, timing, actions }) {
   }
 
   function onKeyUp(e) {
-    const action = keyToAction.get(e.key);
+    const action = actionFor(e);
     if (action && action in held) held[action] = null;
   }
 
