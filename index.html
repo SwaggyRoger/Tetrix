@@ -795,9 +795,21 @@ const AUDIO = {
   enabled: true,
   masterVolume: 0.45,
   rootHz: 277.18, // C#4 — the black-key pentatonic everything is transposed from
-  comboSemitonesPerStep: 2, // whole-tone step per extra combo; keeps the colour
-  maxComboSteps: 6,         // stop transposing up beyond this, or it turns shrill
   reverb: { seconds: 2.6, decay: 2.4, mix: 0.34 },
+
+  // A combo run escalates on four axes at once. Pitch alone was too subtle to
+  // feel like a build-up, so each consecutive clear is also louder, rings
+  // longer, and from the third one adds a bright arpeggio over the top.
+  combo: {
+    semitonesPerStep: 3, // a minor third per step — clearly audible, still consonant
+    maxSteps: 7,         // caps the rise at +21 semitones
+    gainPerStep: 0.14,
+    maxGainScale: 1.9,
+    decayPerStep: 0.22,  // seconds added per step
+    maxDecayAdd: 1.4,
+    sparkleFrom: 3,      // combo at which the shimmer layer joins
+    sparkle: { semitones: [19, 24, 28], attack: 0.005, decay: 0.9, gain: 0.22, type: 'sine', spreadMs: 45 },
+  },
 
   // Soft landing: a barely-there tap so ordinary play is not noisy.
   lock: { semitones: [12], attack: 0.004, decay: 0.2, gain: 0.09, type: 'triangle' },
@@ -1296,11 +1308,20 @@ const __m_audio_sound_js = (() => {
 // clear" should sound like; synth.js knows how to make a sound, loader.js knows
 // where optional files live, and core/ knows nothing about any of it.
 
-// How far up to transpose for a combo run. The first clear of a run is
-// unshifted; each consecutive one steps up, capped so it never turns shrill.
-function comboShift(cfg, combo) {
-  const steps = Math.min(Math.max(combo - 1, 0), cfg.maxComboSteps);
-  return steps * cfg.comboSemitonesPerStep;
+// How much a combo run escalates the clear cue. The first clear of a run is
+// untouched; each consecutive one lifts pitch, gain and decay together, and
+// past `sparkleFrom` a shimmer layer joins on top. Pitch on its own was not
+// enough to read as a build-up.
+function comboLift(cfg, combo) {
+  const c = cfg.combo;
+  const steps = Math.min(Math.max(combo - 1, 0), c.maxSteps);
+  return {
+    steps,
+    semitoneShift: steps * c.semitonesPerStep,
+    gainScale: Math.min(1 + steps * c.gainPerStep, c.maxGainScale),
+    decayAdd: Math.min(steps * c.decayPerStep, c.maxDecayAdd),
+    sparkle: combo >= c.sparkleFrom,
+  };
 }
 
 function createSound({ cfg, synth, samples = {}, storage = globalThis.localStorage }) {
@@ -1372,8 +1393,20 @@ function createSound({ cfg, synth, samples = {}, storage = globalThis.localStora
       cue('hardDrop', cfg.hardDrop, { velocity: 0.6 + 0.4 * Math.min(distance / 18, 1), glide: true });
     },
     onLineClear({ count = 1, combo = 1 } = {}) {
-      const spec = cfg.clears[Math.min(Math.max(count, 1), 4)];
-      cue(`clear${Math.min(Math.max(count, 1), 4)}`, spec, { semitoneShift: comboShift(cfg, combo) });
+      const n = Math.min(Math.max(count, 1), 4);
+      const lift = comboLift(cfg, combo);
+      const base = cfg.clears[n];
+      cue(
+        `clear${n}`,
+        { ...base, gain: base.gain * lift.gainScale, decay: base.decay + lift.decayAdd },
+        { semitoneShift: lift.semitoneShift },
+      );
+      // The shimmer is a synthesised layer on top. It is skipped when the cue
+      // has been overridden with a file, so an override stays exactly what the
+      // author supplied — see assets/audio/README.md.
+      if (lift.sparkle && !muted && !samples[`clear${n}`]) {
+        synth.chord(cfg.combo.sparkle, { semitoneShift: lift.semitoneShift });
+      }
     },
     onLevelUp() {
       cue('levelUp', cfg.levelUp);
@@ -1383,9 +1416,9 @@ function createSound({ cfg, synth, samples = {}, storage = globalThis.localStora
     },
   };
 }
-return { comboShift, createSound };
+return { comboLift, createSound };
 })();
-const { comboShift, createSound } = __m_audio_sound_js;
+const { comboLift, createSound } = __m_audio_sound_js;
 
 
 // ---- src/render/sprites.js ----
@@ -2119,7 +2152,7 @@ window.__tetrix = {
   hud,
   config,
   sound,
-  audio: { synth, scheduleChord, scheduleGlide, createBus, semitoneHz, comboShift },
+  audio: { synth, scheduleChord, scheduleGlide, createBus, semitoneHz, comboLift },
 };
 </script>
 </body>

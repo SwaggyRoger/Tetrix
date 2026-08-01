@@ -69,9 +69,21 @@ export const AUDIO = {
   enabled: true,
   masterVolume: 0.45,
   rootHz: 277.18, // C#4 — the black-key pentatonic everything is transposed from
-  comboSemitonesPerStep: 2, // whole-tone step per extra combo; keeps the colour
-  maxComboSteps: 6,         // stop transposing up beyond this, or it turns shrill
   reverb: { seconds: 2.6, decay: 2.4, mix: 0.34 },
+
+  // A combo run escalates on four axes at once. Pitch alone was too subtle to
+  // feel like a build-up, so each consecutive clear is also louder, rings
+  // longer, and from the third one adds a bright arpeggio over the top.
+  combo: {
+    semitonesPerStep: 3, // a minor third per step — clearly audible, still consonant
+    maxSteps: 7,         // caps the rise at +21 semitones
+    gainPerStep: 0.14,
+    maxGainScale: 1.9,
+    decayPerStep: 0.22,  // seconds added per step
+    maxDecayAdd: 1.4,
+    sparkleFrom: 3,      // combo at which the shimmer layer joins
+    sparkle: { semitones: [19, 24, 28], attack: 0.005, decay: 0.9, gain: 0.22, type: 'sine', spreadMs: 45 },
+  },
 
   // Soft landing: a barely-there tap so ordinary play is not noisy.
   lock: { semitones: [12], attack: 0.004, decay: 0.2, gain: 0.09, type: 'triangle' },

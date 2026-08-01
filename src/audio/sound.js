@@ -2,11 +2,20 @@
 // clear" should sound like; synth.js knows how to make a sound, loader.js knows
 // where optional files live, and core/ knows nothing about any of it.
 
-// How far up to transpose for a combo run. The first clear of a run is
-// unshifted; each consecutive one steps up, capped so it never turns shrill.
-export function comboShift(cfg, combo) {
-  const steps = Math.min(Math.max(combo - 1, 0), cfg.maxComboSteps);
-  return steps * cfg.comboSemitonesPerStep;
+// How much a combo run escalates the clear cue. The first clear of a run is
+// untouched; each consecutive one lifts pitch, gain and decay together, and
+// past `sparkleFrom` a shimmer layer joins on top. Pitch on its own was not
+// enough to read as a build-up.
+export function comboLift(cfg, combo) {
+  const c = cfg.combo;
+  const steps = Math.min(Math.max(combo - 1, 0), c.maxSteps);
+  return {
+    steps,
+    semitoneShift: steps * c.semitonesPerStep,
+    gainScale: Math.min(1 + steps * c.gainPerStep, c.maxGainScale),
+    decayAdd: Math.min(steps * c.decayPerStep, c.maxDecayAdd),
+    sparkle: combo >= c.sparkleFrom,
+  };
 }
 
 export function createSound({ cfg, synth, samples = {}, storage = globalThis.localStorage }) {
@@ -78,8 +87,20 @@ export function createSound({ cfg, synth, samples = {}, storage = globalThis.loc
       cue('hardDrop', cfg.hardDrop, { velocity: 0.6 + 0.4 * Math.min(distance / 18, 1), glide: true });
     },
     onLineClear({ count = 1, combo = 1 } = {}) {
-      const spec = cfg.clears[Math.min(Math.max(count, 1), 4)];
-      cue(`clear${Math.min(Math.max(count, 1), 4)}`, spec, { semitoneShift: comboShift(cfg, combo) });
+      const n = Math.min(Math.max(count, 1), 4);
+      const lift = comboLift(cfg, combo);
+      const base = cfg.clears[n];
+      cue(
+        `clear${n}`,
+        { ...base, gain: base.gain * lift.gainScale, decay: base.decay + lift.decayAdd },
+        { semitoneShift: lift.semitoneShift },
+      );
+      // The shimmer is a synthesised layer on top. It is skipped when the cue
+      // has been overridden with a file, so an override stays exactly what the
+      // author supplied — see assets/audio/README.md.
+      if (lift.sparkle && !muted && !samples[`clear${n}`]) {
+        synth.chord(cfg.combo.sparkle, { semitoneShift: lift.semitoneShift });
+      }
     },
     onLevelUp() {
       cue('levelUp', cfg.levelUp);

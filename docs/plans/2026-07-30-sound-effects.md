@@ -12,7 +12,8 @@ with combo, all in the impressionist style*).
 | Musical language | Pentatonic / whole-tone, soft attacks, long decays, generated convolution reverb | The written counterpart of the visuals (Debussy, Ravel). No cadence that resolves hard; sound blooms and washes rather than blipping. |
 | "Urgent" drop | Fast downward glide + lowpassed noise thud, 2 ms attack, dry | Deliberately the opposite of the washy clear chords, so urgency reads by contrast. Velocity scales with fall distance. |
 | "Solemnity" | Encoded as four numbers per clear count: root, voice count, attack, decay | Makes the gradient inspectable and testable instead of a matter of taste — see the measurements below. |
-| Combo | Whole-tone transposition, 2 semitones per consecutive clear, capped at 6 steps | A real key change, consonant with the scale. The cap stops a long run turning shrill. |
+| Combo | Escalates on **four** axes together: +3 semitones, louder, longer decay, and a shimmer layer from the third clear. Capped at 7 steps | First attempt moved pitch only (2 semitones/step) and did not read as a build-up — flagged in review as "疊加程度不夠大". Pitch alone is too subtle when the chord is already washy; loudness and a new upper layer are what make a run feel like it is going somewhere. The cap stops a long run turning shrill or drowning the mix. |
+| Shimmer vs overrides | The shimmer is skipped when that cue has a file override | An override should stay exactly what its author supplied. Documented in `assets/audio/README.md`. |
 | Combo counter | Added to `core/game.js`, carried on the `lineclear` event | Presentation layers must not track game state (design rule 2). Kept minimal: a counter only, no scoring or UI — those belong to issue #3. |
 | Hard drop event | New `harddrop` event with distance, emitted before the lock | The `lock` cue would otherwise muddy the slam; the sound layer suppresses the tick that follows a slam. |
 | Mute | `M`, persisted in `localStorage`, shown in the HUD | Audio that cannot be turned off is hostile. |
@@ -45,9 +46,32 @@ with combo, all in the impressionist style*).
 
 A tetris sits two octaves below a single and holds more than three times as long.
 
-**Combo raises pitch monotonically** (zero-crossing rate as a pitch proxy):
-607 → 759 → 771 → 1014 → 1318 Hz for combos 1, 2, 3, 5, 9. Combo 9 is capped at
-12 semitones — exactly double combo 1, as designed.
+**A combo run escalates on every axis**, rendering the full cue (base chord plus
+shimmer) exactly as `onLineClear` builds it:
+
+| Combo | Transpose | Shimmer | Pitch (ZCR) | Peak | RMS | Tail |
+|---|---|---|---|---|---|---|
+| 1 | — | — | 663 Hz | 0.078 | 4.4 | 1.85 s |
+| 2 | +3 | — | 803 Hz | 0.094 | 5.2 | 1.95 s |
+| 3 | +6 | ✓ | 970 Hz | 0.133 | 7.0 | 1.96 s |
+| 4 | +9 | ✓ | 1287 Hz | 0.140 | 8.1 | 2.19 s |
+| 5 | +12 | ✓ | 1418 Hz | 0.151 | 10.2 | 2.13 s |
+| 6 | +15 | ✓ | 1719 Hz | 0.187 | 11.1 | 2.15 s |
+| 8 | +21 | ✓ | 2238 Hz | 0.185 | 13.6 | 2.46 s |
+| 12 | +21 (capped) | ✓ | 2288 Hz | 0.191 | 13.3 | — |
+
+By the fifth consecutive clear the cue is **an octave higher** and carries
+**2.3× the energy** of the first; combos 8 and 12 are identical, confirming the
+cap. Peak stays at 0.19 — no clipping headroom problem.
+
+The first version moved pitch only (2 semitones/step): combo 1→5 rose just
+1.67× in pitch with flat energy, which is what "疊加程度不夠大" was reporting.
+
+Tail length is measured against an absolute floor rather than a share of peak,
+so a louder cue is not penalised. It trends up (1.85 s → 2.46 s) but is not
+strictly monotonic in the render: the generated reverb impulse is random, and
+its tail dominates the last few hundred milliseconds. The decay *parameter* is
+strictly monotonic and is what the unit tests assert.
 
 Note: zero-crossing rate is *not* a good measure of solemnity, because a tetris
 chord spans low **and** high voices; low-band energy share is the honest metric
@@ -58,7 +82,9 @@ and is the one tabled above.
   with combo running 1, 2, 3, resetting to 1 after a lock that clears nothing
 - A tetris selects the 6-voice, 3.2 s, −12-semitone voicing
 - The lock tick after a hard drop is suppressed as designed (glide only)
-- Combo transposition at the synth: shift 0, 2, 4 semitones for combos 1, 2, 3
+- A five-clear run schedules exactly what the design says, live:
+  gain 0.300 / 0.342 / 0.384 / 0.426 / 0.468, decay 1.00 / 1.22 / 1.44 / 1.66 / 1.88 s,
+  transpose 0 / 3 / 6 / 9 / 12, with the shimmer chord joining from the third
 - Muted: nothing is scheduled at all
 - `AudioContext` reaches `running` after a user gesture; no console errors
 

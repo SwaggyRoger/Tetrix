@@ -12,7 +12,7 @@ import { createKeyboard } from './input/keyboard.js';
 import { createHud } from './ui/hud.js';
 import { loadSkin } from './assets/loader.js';
 import { createSynth, scheduleChord, scheduleGlide, createBus, semitoneHz } from './audio/synth.js';
-import { createSound, comboShift } from './audio/sound.js';
+import { createSound, comboLift } from './audio/sound.js';
 import { loadAudioSet } from './audio/loader.js';
 
 const boardCanvas = document.getElementById('board');
@@ -173,5 +173,5 @@ window.__tetrix = {
   hud,
   config,
   sound,
-  audio: { synth, scheduleChord, scheduleGlide, createBus, semitoneHz, comboShift },
+  audio: { synth, scheduleChord, scheduleGlide, createBus, semitoneHz, comboLift },
 };

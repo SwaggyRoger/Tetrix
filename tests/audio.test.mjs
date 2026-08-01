@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { validateAudioManifest, AUDIO_CUES, AUDIO_MANIFEST_VERSION } from '../src/audio/loader.js';
-import { comboShift } from '../src/audio/sound.js';
+import { comboLift } from '../src/audio/sound.js';
 import { semitoneHz } from '../src/audio/synth.js';
 import { AUDIO } from '../src/config.js';
 
@@ -88,21 +88,51 @@ test('every cue the sound module can play is a known cue name', () => {
   for (const n of [1, 2, 3, 4]) assert.ok(AUDIO.clears[n], `AUDIO.clears[${n}] missing`);
 });
 
-test('combo transposition: first clear unshifted, then rising, then capped', () => {
-  assert.equal(comboShift(AUDIO, 1), 0, 'a lone clear is not transposed');
-  assert.equal(comboShift(AUDIO, 2), AUDIO.comboSemitonesPerStep);
-  assert.equal(comboShift(AUDIO, 4), 3 * AUDIO.comboSemitonesPerStep);
-  const capped = AUDIO.maxComboSteps * AUDIO.comboSemitonesPerStep;
-  assert.equal(comboShift(AUDIO, 99), capped, 'stops rising at maxComboSteps');
-  assert.equal(comboShift(AUDIO, 0), 0, 'a zero/absent combo is safe');
+test('a lone clear is not escalated at all', () => {
+  const lift = comboLift(AUDIO, 1);
+  assert.deepEqual(
+    { semitoneShift: lift.semitoneShift, gainScale: lift.gainScale, decayAdd: lift.decayAdd, sparkle: lift.sparkle },
+    { semitoneShift: 0, gainScale: 1, decayAdd: 0, sparkle: false },
+  );
+  assert.equal(comboLift(AUDIO, 0).steps, 0, 'a zero/absent combo is safe');
+});
+
+test('a combo run escalates on every axis at once, not just pitch', () => {
+  const runs = [1, 2, 3, 4, 5, 6].map((c) => comboLift(AUDIO, c));
+  for (let i = 1; i < runs.length; i++) {
+    assert.ok(runs[i].semitoneShift > runs[i - 1].semitoneShift, `combo ${i + 1}: higher`);
+    assert.ok(runs[i].gainScale > runs[i - 1].gainScale, `combo ${i + 1}: louder`);
+    assert.ok(runs[i].decayAdd > runs[i - 1].decayAdd, `combo ${i + 1}: rings longer`);
+  }
+});
+
+test('the shimmer layer joins partway through a run, not at the start', () => {
+  const from = AUDIO.combo.sparkleFrom;
+  assert.ok(from >= 2, 'a single clear must never sparkle');
+  assert.equal(comboLift(AUDIO, from - 1).sparkle, false);
+  assert.equal(comboLift(AUDIO, from).sparkle, true);
+  assert.equal(comboLift(AUDIO, from + 5).sparkle, true);
+});
+
+test('escalation is capped so a long run cannot run away', () => {
+  const c = AUDIO.combo;
+  const far = comboLift(AUDIO, 99);
+  assert.equal(far.steps, c.maxSteps);
+  assert.equal(far.semitoneShift, c.maxSteps * c.semitonesPerStep);
+  assert.equal(far.gainScale, Math.min(1 + c.maxSteps * c.gainPerStep, c.maxGainScale));
+  assert.equal(far.decayAdd, Math.min(c.maxSteps * c.decayPerStep, c.maxDecayAdd));
+  assert.deepEqual(comboLift(AUDIO, 999), far, 'past the cap nothing changes further');
 });
 
 test('a higher combo is a strictly higher frequency', () => {
-  const hz = (combo) => semitoneHz(AUDIO.rootHz, AUDIO.clears[1].semitones[0] + comboShift(AUDIO, combo));
+  const hz = (combo) =>
+    semitoneHz(AUDIO.rootHz, AUDIO.clears[1].semitones[0] + comboLift(AUDIO, combo).semitoneShift);
   const pitches = [1, 2, 3, 4, 5].map(hz);
   for (let i = 1; i < pitches.length; i++) {
     assert.ok(pitches[i] > pitches[i - 1], `combo ${i + 1} must be higher than combo ${i}`);
   }
+  // The rise must be big enough to hear: a full octave by the fifth clear.
+  assert.ok(pitches[4] / pitches[0] >= 2, 'combo 5 is at least an octave above combo 1');
 });
 
 test('solemnity gradient: more lines means lower, fuller and longer', () => {

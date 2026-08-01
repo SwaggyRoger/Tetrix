@@ -136,8 +136,10 @@ sample. Harmony is pentatonic/whole-tone with soft attacks and long decays, to
 match the painting; the reverb is a generated impulse response.
 
 Line clears get more solemn the more rows go at once (lower root, more voices,
-longer decay), and each consecutive clear in a combo run is transposed up.
-All of it is numbers in `AUDIO` in `src/config.js`.
+longer decay). A combo run escalates on four axes together — each consecutive
+clear is transposed up a minor third, louder and longer, and from the third one
+a shimmer layer joins over the top; by the fifth the cue is an octave higher
+with 2.3× the energy. All of it is numbers in `AUDIO` in `src/config.js`.
 
 Press **M** to mute (remembered in `localStorage`). Browsers only start audio
 after a user gesture, so the first sound arrives once you click **Game Start**
