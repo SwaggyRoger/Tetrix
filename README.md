@@ -56,6 +56,7 @@ verification checklist.
 | C / Shift | Hold 保留方塊 |
 | P / Esc | Pause 暫停 |
 | R | Restart 重新開始 |
+| M | Mute 靜音 |
 | Enter | Start / Play again 開始 |
 
 ## Architecture 架構
@@ -65,15 +66,22 @@ index.html            GENERATED single-file build — double-click to play
 dev.html              development entry page (5 canvases + HUD markup)
 build.mjs             zero-dependency bundler: dev.html + styles.css + src/ → index.html
 styles.css            page chrome only — game visuals are all canvas
-assets/               ★ YOUR artwork — drop images in, no build step. See assets/README.md
+assets/               ★ YOUR media — drop files in, no build step
 ├── manifest.js         skin list + which one is active (.js, not .json: file:// blocks fetch)
-└── skins/example/      demo tiles; set activeSkin:'example' to see them
+├── skins/example/      demo tiles; set activeSkin:'example' to see them
+└── audio/              sound overrides, INDEPENDENT of the artwork manifest above
+    └── manifest.js     optional — every cue is synthesised unless overridden
 src/
 ├── config.js         ★ ALL tunables: board size, speed curve, palette,
-│                       particle settings, key bindings. Start here.
+│                       particle settings, AUDIO voicings, key bindings. Start here.
 ├── main.js           composition root — the only file that imports everything
 ├── assets/
 │   └── loader.js     validates assets/manifest.js, preloads images, falls back
+├── audio/            synthesised sound. No files, no dependencies.
+│   ├── synth.js      Web Audio voices + generated reverb; schedulers take any
+│   │                 context, so cues can be rendered offline and measured
+│   ├── sound.js      maps game events to cues; combo → transposition
+│   └── loader.js     validates assets/audio/manifest.js, preloads overrides
 ├── core/             PURE game logic. No DOM, no canvas. Runs in Node.
 │   ├── tetromino.js  shapes, rotation states, SRS wall-kick tables
 │   ├── bag.js        7-bag randomizer (RNG injectable for tests)
@@ -92,7 +100,8 @@ src/
     └── hud.js        score/level/lines DOM bindings, overlay, high score
 tests/
 ├── core.test.mjs     node --test unit tests over src/core/
-└── assets.test.mjs   manifest validation rules (pure, no DOM)
+├── assets.test.mjs   artwork manifest validation rules (pure, no DOM)
+└── audio.test.mjs    audio manifest rules + combo/solemnity invariants
 docs/plans/           decision records & implementation plans per feature
 ```
 
@@ -119,11 +128,29 @@ docs/plans/           decision records & implementation plans per feature
    *malformed manifest* must `console.error` naming the offending field.
    Never let artwork block startup.
 
+## Sound 聲音
+
+Every cue is **synthesised at runtime** — no audio files ship with the game.
+That is what makes the combo rise a real transposition instead of a sped-up
+sample. Harmony is pentatonic/whole-tone with soft attacks and long decays, to
+match the painting; the reverb is a generated impulse response.
+
+Line clears get more solemn the more rows go at once (lower root, more voices,
+longer decay). A combo run escalates on four axes together — each consecutive
+clear is transposed up a minor third, louder and longer, and from the third one
+a shimmer layer joins over the top; by the fifth the cue is an octave higher
+with 2.3× the energy. All of it is numbers in `AUDIO` in `src/config.js`.
+
+Press **M** to mute (remembered in `localStorage`). Browsers only start audio
+after a user gesture, so the first sound arrives once you click **Game Start**
+or press a key. To use your own recordings instead, see
+[`assets/audio/README.md`](assets/audio/README.md) — a separate manifest from
+the artwork one, so sound and skins never interfere.
+
 ## Extension ideas (roadmap, not yet built)
 
-- Sound: add `src/audio/` module, subscribe to `lineclear` / `lock` /
-  `levelup` events in `main.js`, and add an `audio` block to
-  `assets/manifest.js` so sounds are swappable like the skins.
+- `node build.mjs --embed`: a second output that base64-inlines `assets/` for a
+  true single file, at the cost of swappable media.
 - Touch controls: add `src/input/touch.js` exposing the same injected-actions
   interface as `keyboard.js`.
 - More paintings: alternative palettes (Van Gogh, Renoir) are just another
@@ -131,5 +158,18 @@ docs/plans/           decision records & implementation plans per feature
 
 ## Debugging
 
-The running game exposes `window.__tetrix = { gameApi, particles, config }`
+The running game exposes
+`window.__tetrix = { gameApi, particles, renderer, hud, config, sound, audio }`
 in the console — you can inspect state, force pieces, or trigger bursts.
+
+`audio` carries the schedulers (`scheduleChord`, `scheduleGlide`, `createBus`),
+which take any context. Render a cue into an `OfflineAudioContext` and you can
+measure it rather than guess — that is how the sound design is verified:
+
+```js
+const { audio, config } = window.__tetrix;
+const ctx = new OfflineAudioContext(2, 44100 * 6, 44100);
+audio.scheduleChord(ctx, audio.createBus(ctx, config.AUDIO).input,
+  config.AUDIO.clears[4], { rootHz: config.AUDIO.rootHz, at: 0 });
+const buf = await ctx.startRendering(); // now measure it
+```

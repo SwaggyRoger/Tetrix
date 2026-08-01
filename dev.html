@@ -29,6 +29,7 @@
           <dt>C</dt><dd>Hold 保留</dd>
           <dt>P</dt><dd>Pause 暫停</dd>
           <dt>R</dt><dd>Restart 重來</dd>
+          <dt>M</dt><dd>Mute 靜音</dd>
           <dt>Enter</dt><dd>Start 開始</dd>
         </dl>
       </section>
@@ -58,6 +59,8 @@
         <p class="stat" id="stat-lines">0</p>
         <h2>Best</h2>
         <p class="stat" id="stat-high">0</p>
+        <h2>Sound</h2>
+        <p class="stat" id="stat-sound">On</p>
       </section>
     </aside>
   </main>
@@ -65,6 +68,9 @@
   <!-- Optional custom artwork. Plain (non-module) script so it works from
        file:// in the generated index.html too — see assets/README.md. -->
   <script src="assets/manifest.js"></script>
+  <!-- Optional sound overrides — independent of the artwork manifest above.
+       Sound is synthesised by default, so this file may name nothing at all. -->
+  <script src="assets/audio/manifest.js"></script>
   <script type="module" src="src/main.js"></script>
 </body>
 </html>

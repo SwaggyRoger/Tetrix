@@ -38,6 +38,11 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
     score: 0,
     lines: 0,
     level: 1,
+    // Consecutive locks that cleared at least one row. 1 on the first clear,
+    // 2 on the next one in a row, back to 0 as soon as a piece locks without
+    // clearing. Carried on the `lineclear` event so presentation layers can
+    // react to a run without tracking state of their own.
+    combo: 0,
     on: emitter.on,
   };
 
@@ -107,13 +112,16 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
       }
       board.clearRows(full);
       game.lines += full.length;
+      game.combo += 1;
       game.score += (score1[full.length] ?? 0) * game.level;
       const newLevel = Math.floor(game.lines / linesPerLevel) + 1;
       if (newLevel > game.level) {
         game.level = newLevel;
         emitter.emit('levelup', { level: newLevel });
       }
-      emitter.emit('lineclear', { rows: full, count: full.length, cells });
+      emitter.emit('lineclear', { rows: full, count: full.length, cells, combo: game.combo });
+    } else {
+      game.combo = 0;
     }
 
     if (topOut) {
@@ -170,6 +178,9 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
       let dist = 0;
       while (tryMove(0, 1)) dist++;
       game.score += dist * hardDropPerCell;
+      // Announced before the lock so a listener can sound the impact ahead of
+      // any line-clear cue it triggers.
+      emitter.emit('harddrop', { distance: dist, type: game.piece.type });
       lockPiece();
     },
     rotate(dir) {
@@ -221,6 +232,7 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
       game.score = 0;
       game.lines = 0;
       game.level = 1;
+      game.combo = 0;
       game.state = STATE.PLAYING;
       spawnNext();
     },
