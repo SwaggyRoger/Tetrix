@@ -28,19 +28,12 @@ body {
   z-index: -1;
 }
 
-.frame {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 20px;
-  padding: 24px 16px;
-}
-
-.stage {
+.masthead {
   text-align: center;
+  padding-top: 18px;
 }
 
-.stage h1 {
+.masthead h1 {
   font-size: 2rem;
   font-weight: normal;
   letter-spacing: 0.35em;
@@ -54,6 +47,35 @@ body {
   margin-bottom: 10px;
 }
 
+/* Holds one player column, or two side by side in versus. */
+.frame {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 28px;
+  padding: 8px 16px;
+}
+
+.player {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.board-column {
+  text-align: center;
+}
+
+/* Only shown in versus, where the two boards need telling apart. */
+.player-label {
+  font-size: 0.85rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  min-height: 1.2em;
+  margin-bottom: 4px;
+}
+
 .board-wrap {
   position: relative;
   display: inline-block;
@@ -63,11 +85,11 @@ body {
   background: #fcf9f0;
 }
 
-#board {
+[data-canvas='board'] {
   display: block;
 }
 
-#effects {
+[data-canvas='effects'] {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -83,6 +105,8 @@ body {
   gap: 8px;
   background: rgba(252, 249, 240, 0.82);
   backdrop-filter: blur(2px);
+  text-align: center;
+  padding: 12px;
 }
 
 .overlay h2 {
@@ -96,7 +120,8 @@ body {
   display: none;
 }
 
-.overlay button {
+.overlay button,
+.menu button {
   font-family: inherit;
   font-size: 1rem;
   letter-spacing: 0.15em;
@@ -109,7 +134,8 @@ body {
   transition: background 0.15s ease, transform 0.15s ease;
 }
 
-.overlay button:hover {
+.overlay button:hover,
+.menu button:hover {
   background: #f2e3c0;
   transform: scale(1.04);
 }
@@ -124,7 +150,6 @@ body {
   flex-direction: column;
   gap: 16px;
   width: 150px;
-  padding-top: 78px;
 }
 
 .panel {
@@ -169,63 +194,203 @@ body {
 .controls dd {
   opacity: 0.8;
 }
+
+/* Versus puts two full columns on screen. The gap *between* the players has
+   to beat the gap *inside* one of them, or the two boards read as one wide
+   instrument panel rather than as two opponents. */
+.frame.two-up {
+  gap: 46px;
+}
+
+.frame.two-up .player {
+  gap: 10px;
+}
+
+.frame.two-up .side {
+  width: 108px;
+}
+
+/* Mirror the second player so the layout is symmetrical: keys on the two
+   outer edges, the two score panels facing each other in the middle where
+   they are easy to compare mid-duel. */
+.frame.two-up .player:last-child {
+  flex-direction: row-reverse;
+}
+
+.frame.two-up .panel {
+  padding: 8px;
+}
+
+.frame.two-up .stats .stat {
+  font-size: 1.05rem;
+  margin-bottom: 6px;
+}
+
+/* The mode picker: a full-page wash so it reads as a title screen rather
+   than a dialog stuck on top of a game. */
+.menu {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(246, 241, 227, 0.9);
+  backdrop-filter: blur(3px);
+  z-index: 10;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.menu.hidden {
+  display: none;
+}
+
+.menu-card {
+  background: rgba(252, 249, 240, 0.92);
+  border: 1px solid rgba(160, 138, 102, 0.6);
+  box-shadow: 0 10px 40px rgba(74, 64, 56, 0.25);
+  padding: 26px 30px;
+  width: min(560px, 100%);
+  text-align: center;
+}
+
+.menu-card h2 {
+  font-size: 1.9rem;
+  font-weight: normal;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+.mode-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 18px 0 14px;
+}
+
+.menu .mode-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.mode-btn strong {
+  display: block;
+  font-weight: normal;
+  letter-spacing: 0.12em;
+}
+
+.mode-btn .num {
+  display: inline-block;
+  width: 1.6em;
+  opacity: 0.55;
+}
+
+.mode-btn .desc {
+  display: block;
+  font-size: 0.78rem;
+  opacity: 0.7;
+  line-height: 1.45;
+  margin-top: 3px;
+  padding-left: 1.6em;
+}
+
+.menu .hint {
+  font-size: 0.78rem;
+  opacity: 0.6;
+}
+
+.menu .controls-note {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  margin-bottom: 4px;
+}
+
+.menu .mode-back {
+  font-size: 0.85rem;
+  padding: 6px 18px;
+}
 </style>
 </head>
 <body>
   <canvas id="background"></canvas>
 
-  <main class="frame">
-    <aside class="side">
-      <section class="panel">
-        <h2>Hold</h2>
-        <canvas id="hold"></canvas>
-      </section>
-      <section class="panel controls">
-        <h2>Controls</h2>
-        <dl>
-          <dt>← →</dt><dd>Move 移動</dd>
-          <dt>↑ / X</dt><dd>Rotate 旋轉</dd>
-          <dt>Z</dt><dd>Rotate ↺</dd>
-          <dt>↓</dt><dd>Soft drop 緩降</dd>
-          <dt>Space</dt><dd>Hard drop 直落</dd>
-          <dt>C</dt><dd>Hold 保留</dd>
-          <dt>P</dt><dd>Pause 暫停</dd>
-          <dt>R</dt><dd>Restart 重來</dd>
-          <dt>M</dt><dd>Mute 靜音</dd>
-          <dt>Enter</dt><dd>Start 開始</dd>
-        </dl>
-      </section>
-    </aside>
+  <header class="masthead">
+    <h1>Tetrix</h1>
+    <p class="subtitle">an impressionist tetris</p>
+  </header>
 
-    <section class="stage">
-      <h1>Tetrix</h1>
-      <p class="subtitle">an impressionist tetris</p>
-      <div class="board-wrap">
-        <canvas id="board"></canvas>
-        <canvas id="effects"></canvas>
-        <div id="overlay" class="overlay hidden"></div>
+  <!-- One player's whole column. main.js stamps this once for a solo game and
+       twice for versus, so the two boards can never drift apart. -->
+  <template id="player-template">
+    <section class="player">
+      <aside class="side">
+        <section class="panel">
+          <h2>Hold</h2>
+          <canvas data-canvas="hold"></canvas>
+        </section>
+        <section class="panel controls" data-controls="1">
+          <h2>Controls</h2>
+          <dl>
+            <dt>← →</dt><dd>Move 移動</dd>
+            <dt>↑ / X</dt><dd>Rotate 旋轉</dd>
+            <dt>Z / /</dt><dd>Rotate ↺</dd>
+            <dt>↓</dt><dd>Soft drop 緩降</dd>
+            <dt>Space</dt><dd>Hard drop 直落</dd>
+            <dt>C / Shift</dt><dd>Hold 保留</dd>
+            <dt>P</dt><dd>Pause 暫停</dd>
+            <dt>R</dt><dd>Restart 重來</dd>
+            <dt>M</dt><dd>Mute 靜音</dd>
+          </dl>
+        </section>
+        <section class="panel controls" data-controls="2">
+          <h2>Controls</h2>
+          <dl>
+            <dt>A D</dt><dd>Move 移動</dd>
+            <dt>E</dt><dd>Rotate 旋轉</dd>
+            <dt>Q</dt><dd>Rotate ↺</dd>
+            <dt>S</dt><dd>Soft drop 緩降</dd>
+            <dt>W</dt><dd>Hard drop 直落</dd>
+            <dt>F</dt><dd>Hold 保留</dd>
+          </dl>
+        </section>
+      </aside>
+
+      <div class="board-column">
+        <p class="player-label" data-label></p>
+        <div class="board-wrap">
+          <canvas data-canvas="board"></canvas>
+          <canvas data-canvas="effects"></canvas>
+          <div class="overlay hidden" data-overlay></div>
+        </div>
       </div>
-    </section>
 
-    <aside class="side">
-      <section class="panel">
-        <h2>Next</h2>
-        <canvas id="next"></canvas>
-      </section>
-      <section class="panel stats">
-        <h2>Score</h2>
-        <p class="stat" id="stat-score">0</p>
-        <h2>Level</h2>
-        <p class="stat" id="stat-level">1</p>
-        <h2>Lines</h2>
-        <p class="stat" id="stat-lines">0</p>
-        <h2>Best</h2>
-        <p class="stat" id="stat-high">0</p>
-        <h2>Sound</h2>
-        <p class="stat" id="stat-sound">On</p>
-      </section>
-    </aside>
-  </main>
+      <aside class="side">
+        <section class="panel">
+          <h2>Next</h2>
+          <canvas data-canvas="next"></canvas>
+        </section>
+        <section class="panel stats">
+          <div data-row><h2>Score</h2><p class="stat" data-stat="score">0</p></div>
+          <div data-row><h2>Level</h2><p class="stat" data-stat="level">1</p></div>
+          <div data-row><h2>Lines</h2><p class="stat" data-stat="lines">0</p></div>
+          <div data-row hidden><h2>Combo</h2><p class="stat" data-stat="combo">—</p></div>
+          <div data-row hidden><h2>Stone 石塊</h2><p class="stat" data-stat="objective">0</p></div>
+          <div data-row hidden><h2>Time</h2><p class="stat" data-stat="timer">2:00</p></div>
+          <div data-row><h2>Best</h2><p class="stat" data-stat="high">0</p></div>
+          <div data-row><h2>Sound</h2><p class="stat" data-stat="sound">On</p></div>
+        </section>
+      </aside>
+    </section>
+  </template>
+
+  <main class="frame" id="frame"></main>
+
+  <div id="menu" class="menu hidden"></div>
 
   <!-- Optional custom artwork. Plain (non-module) script so it works from
        file:// in the generated index.html too — see assets/README.md. -->
@@ -466,6 +631,53 @@ function createBoard(cols, rows) {
       while (keep.length < rows) keep.unshift(Array(cols).fill(null));
       grid = keep;
     },
+    // Sacrifice the bottom row: it vanishes and everything above falls one
+    // row. This is the No Brainer rescue — the stack can never reach the
+    // ceiling because the oldest row is given up instead. Returns the cells
+    // that were destroyed so the effects layer can burst them.
+    dropBottomRow() {
+      const y = rows - 1;
+      const removed = [];
+      for (let x = 0; x < cols; x++) {
+        if (grid[y][x] !== null) removed.push({ x, y, type: grid[y][x] });
+      }
+      grid.pop();
+      grid.unshift(Array(cols).fill(null));
+      return removed;
+    },
+    // Push `lines` junk rows in from the bottom, each full except for the
+    // column `holeX`. Returns true if the upward shift pushed occupied cells
+    // off the top of the field (a top-out).
+    pushGarbage(lines, holeX, type) {
+      let toppedOut = false;
+      for (let i = 0; i < lines; i++) {
+        const evicted = grid.shift();
+        if (evicted.some((c) => c !== null)) toppedOut = true;
+        const row = Array(cols).fill(type);
+        row[holeX] = null;
+        grid.push(row);
+      }
+      return toppedOut;
+    },
+    // Paint a pre-built layout, used by the map mode's levels. `pattern` is an
+    // array of strings, one per row, aligned to the BOTTOM of the board: '#'
+    // is a filled cell, every other character is empty. Rows that would fall
+    // above the top of the field are ignored.
+    applyPattern(pattern, type) {
+      const top = rows - pattern.length;
+      pattern.forEach((line, i) => {
+        const y = top + i;
+        if (y < 0) return;
+        for (let x = 0; x < cols; x++) grid[y][x] = line[x] === '#' ? type : null;
+      });
+    },
+    countType(type) {
+      let n = 0;
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) if (grid[y][x] === type) n++;
+      }
+      return n;
+    },
     reset() {
       grid = makeGrid(cols, rows);
     },
@@ -490,7 +702,25 @@ const STATE = {
   GAME_OVER: 'gameover',
 };
 
-function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
+// Cell type used for junk: the map mode's pre-built levels and the versus
+// mode's incoming garbage rows. It is not a tetromino, so it can never be
+// spawned — it only ever arrives on the board already placed.
+const GARBAGE = 'G';
+
+// `rules` is what makes one mode differ from another. The defaults reproduce
+// classic play exactly, so a mode only has to name what it changes.
+const DEFAULT_RULES = {
+  // 'gameover' ends the run at the ceiling; 'rescue' sacrifices the bottom
+  // row instead and plays on forever (the No Brainer mode).
+  topOut: 'gameover',
+  // Versus only: line clears send junk rows to the opponent.
+  sendsGarbage: false,
+  // Multiplies every gravity step. > 1 is slower, < 1 is faster; this is the
+  // hook a future hard mode raises.
+  gravityScale: 1,
+};
+
+function createGame({ board: boardCfg, timing, scoring, gravityMs, rng, rules } = {}) {
   const cols = boardCfg?.cols ?? 10;
   const rows = boardCfg?.rows ?? 20;
   const lockDelayMs = timing?.lockDelayMs ?? 500;
@@ -499,6 +729,11 @@ function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
   const hardDropPerCell = scoring?.hardDropPerCell ?? 2;
   const linesPerLevel = scoring?.linesPerLevel ?? 10;
   const gravityFn = gravityMs ?? ((level) => Math.max(1000 * 0.82 ** (level - 1), 55));
+  const garbageTable = scoring?.garbageLines ?? { 1: 0, 2: 1, 3: 2, 4: 4 };
+  // Indexed by combo - 1, clamped to the last entry.
+  const comboGarbage = scoring?.comboGarbage ?? [0, 0, 1, 1, 2, 2, 3, 4];
+  const rule = { ...DEFAULT_RULES, ...rules };
+  const random = rng ?? Math.random;
 
   const board = createBoard(cols, rows);
   const emitter = createEmitter();
@@ -519,12 +754,20 @@ function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
     // clearing. Carried on the `lineclear` event so presentation layers can
     // react to a run without tracking state of their own.
     combo: 0,
+    // Junk rows sent by the opponent that have not landed yet. They are
+    // applied after the next lock resolves, so a piece already in flight is
+    // never yanked out from under the player.
+    pendingGarbage: 0,
+    // How many times the bottom row has been sacrificed (No Brainer only).
+    rescues: 0,
     on: emitter.on,
   };
 
   let gravityTimer = 0;
   let lockTimer = 0;
   let grounded = false;
+  // Level layout the map mode wants restored on every reset().
+  let startPattern = null;
 
   function cellsOf(piece) {
     return ROTATIONS[piece.type][piece.rot];
@@ -534,13 +777,35 @@ function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
     while (game.queue.length < 3) game.queue.push(bag.next());
   }
 
+  // The ceiling has been reached. Under 'gameover' that is the end; under
+  // 'rescue' the bottom row is sacrificed instead and play continues.
+  // Returns true if the game survived.
+  function topOut() {
+    if (rule.topOut !== 'rescue') {
+      endGame();
+      return false;
+    }
+    const cells = board.dropBottomRow();
+    game.rescues += 1;
+    emitter.emit('rescue', { cells, rescues: game.rescues });
+    return true;
+  }
+
   function spawn(type) {
     const { x, y } = spawnPosition(type, cols);
-    const piece = { type, rot: 0, x, y };
-    if (board.collides(cellsOf(piece), x, y)) {
+    let piece = { type, rot: 0, x, y };
+    // Rescuing frees one row at a time, so a deeply buried spawn may need
+    // several. Bounded by the board height: an empty board always has room,
+    // so this can only run out of attempts if something is badly wrong —
+    // end the game rather than spin.
+    for (let attempt = 0; board.collides(cellsOf(piece), piece.x, piece.y); attempt++) {
       game.piece = piece; // leave it visible where it jammed
-      endGame();
-      return;
+      if (attempt >= rows) {
+        endGame();
+        return;
+      }
+      if (!topOut()) return;
+      piece = { type, rot: 0, x, y };
     }
     game.piece = piece;
     gravityTimer = 0;
@@ -574,9 +839,18 @@ function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
     return board.collides(cellsOf(p), p.x, p.y + 1);
   }
 
+  // Junk rows earned by one lock: a single clear sends nothing, and a long
+  // combo run eventually matches the clear itself. Kept here rather than in
+  // the versus wiring so the number is testable without a second player.
+  function garbageFor(count, combo) {
+    const base = garbageTable[count] ?? 0;
+    const i = Math.min(Math.max(combo, 1), comboGarbage.length) - 1;
+    return base + comboGarbage[i];
+  }
+
   function lockPiece() {
     const p = game.piece;
-    const topOut = board.merge(cellsOf(p), p.x, p.y, p.type);
+    const overCeiling = board.merge(cellsOf(p), p.x, p.y, p.type);
     emitter.emit('lock', { piece: { ...p } });
     game.canHold = true;
 
@@ -596,14 +870,35 @@ function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
         emitter.emit('levelup', { level: newLevel });
       }
       emitter.emit('lineclear', { rows: full, count: full.length, cells, combo: game.combo });
+
+      if (rule.sendsGarbage) {
+        // Clearing lines cancels incoming junk before any is forwarded — the
+        // standard versus rule, and the reason attacking is also a defence.
+        let outgoing = garbageFor(full.length, game.combo);
+        const cancelled = Math.min(game.pendingGarbage, outgoing);
+        game.pendingGarbage -= cancelled;
+        outgoing -= cancelled;
+        if (outgoing > 0) emitter.emit('garbage', { lines: outgoing, combo: game.combo });
+      }
     } else {
       game.combo = 0;
     }
 
-    if (topOut) {
-      endGame();
-      return;
+    if (overCeiling) {
+      if (!topOut()) return;
     }
+
+    if (game.pendingGarbage > 0) {
+      const lines = game.pendingGarbage;
+      game.pendingGarbage = 0;
+      // One hole per delivery, not per row: a stack of junk with a single
+      // column open is dug out with one well-placed piece, which is what
+      // makes a big hit recoverable.
+      const buried = board.pushGarbage(lines, Math.floor(random() * cols), GARBAGE);
+      emitter.emit('garbagelanded', { lines });
+      if (buried && !topOut()) return;
+    }
+
     spawnNext();
   }
 
@@ -630,7 +925,7 @@ function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
         lockTimer = 0;
       }
       gravityTimer += dt;
-      const step = gravityFn(game.level);
+      const step = gravityFn(game.level) * rule.gravityScale;
       while (gravityTimer >= step) {
         gravityTimer -= step;
         if (!tryMove(0, 1)) break;
@@ -699,8 +994,38 @@ function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
       if (game.state === STATE.PLAYING) game.state = STATE.PAUSED;
       else if (game.state === STATE.PAUSED) game.state = STATE.PLAYING;
     },
+    // Change a rule mid-run. The map mode uses it to wind the gravity up
+    // level by level without rebuilding the game.
+    setRules(partial) {
+      Object.assign(rule, partial);
+    },
+    // Junk queued by the opponent. It lands after the next lock, so the
+    // player always gets to finish the piece they are holding.
+    receiveGarbage(lines) {
+      if (game.state !== STATE.PLAYING) return;
+      game.pendingGarbage += lines;
+    },
+    // The map mode's level layout. Remembered so restarting a level (R) or
+    // reset() puts the same junk back rather than starting empty.
+    loadPattern(pattern) {
+      startPattern = pattern ?? null;
+      board.reset();
+      if (startPattern) board.applyPattern(startPattern, GARBAGE);
+    },
+    // Junk cells still on the board — the map mode's win condition is that
+    // this reaches zero.
+    garbageLeft() {
+      return board.countType(GARBAGE);
+    },
+    // Ends the run from outside the core (a versus timer running out, the
+    // opponent being knocked out). Never fires twice.
+    finish() {
+      if (game.state === STATE.GAME_OVER) return;
+      endGame();
+    },
     reset() {
       board.reset();
+      if (startPattern) board.applyPattern(startPattern, GARBAGE);
       bag = createBag(rng);
       game.queue = [];
       game.holdType = null;
@@ -709,6 +1034,8 @@ function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
       game.lines = 0;
       game.level = 1;
       game.combo = 0;
+      game.pendingGarbage = 0;
+      game.rescues = 0;
       game.state = STATE.PLAYING;
       spawnNext();
     },
@@ -717,9 +1044,158 @@ function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
 
   return api;
 }
-return { STATE, createGame };
+return { STATE, GARBAGE, DEFAULT_RULES, createGame };
 })();
-const { STATE, createGame } = __m_core_game_js;
+const { STATE, GARBAGE, DEFAULT_RULES, createGame } = __m_core_game_js;
+
+
+// ---- src/core/modes.js ----
+const __m_core_modes_js = (() => {
+// What the game modes are, and the map mode's level progression. Pure data
+// and pure logic — the layouts themselves live in config.js so a designer can
+// draw new levels without opening this file.
+
+const MODE = {
+  CLASSIC: 'classic',     // the original endless run
+  NO_BRAINER: 'nobrainer', // never ends; the ceiling costs you the bottom row
+  MAP: 'map',             // dig the pre-built junk out of each level
+  VERSUS: 'versus',       // two players, one keyboard
+};
+
+const VERSUS_RULE = {
+  KO: 'ko',       // junk flies both ways; first to the ceiling loses
+  TIMED: 'timed', // junk flies both ways, on a clock; highest score wins
+  SOLO: 'solo',   // no junk, on a clock; purely a race for score
+};
+
+// The `rules` object each mode hands to createGame. Anything not named here
+// keeps its classic default, so a mode only declares what it changes.
+function rulesFor(mode) {
+  switch (mode) {
+    case MODE.NO_BRAINER:
+      return { topOut: 'rescue' };
+    case MODE.VERSUS:
+      return { sendsGarbage: true };
+    default:
+      return {};
+  }
+}
+
+// Walks the map mode through its levels. Deliberately knows nothing about a
+// board: the caller loads `level.pattern` and asks the game when the junk is
+// gone. That keeps the progression testable on its own.
+function createCampaign({ levels }) {
+  let index = 0;
+  return {
+    get index() {
+      return index;
+    },
+    get total() {
+      return levels.length;
+    },
+    get level() {
+      return levels[index] ?? null;
+    },
+    get complete() {
+      return index >= levels.length;
+    },
+    // Move to the next level. False means the campaign has been finished.
+    advance() {
+      index += 1;
+      return index < levels.length;
+    },
+    reset() {
+      index = 0;
+    },
+  };
+}
+return { MODE, VERSUS_RULE, rulesFor, createCampaign };
+})();
+const { MODE, VERSUS_RULE, rulesFor, createCampaign } = __m_core_modes_js;
+
+
+// ---- src/core/match.js ----
+const __m_core_match_js = (() => {
+// Versus orchestration: routes junk between two games, runs the clock, and
+// decides who won. No DOM — it drives two game APIs and emits one event.
+
+
+const DRAW = -1;
+
+// `players` is a pair of createGame() APIs. `limitMs` is ignored by the KO
+// rule, which has no clock.
+function createMatch({ players, rule, limitMs = 120000 }) {
+  const emitter = createEmitter();
+  const timed = rule !== VERSUS_RULE.KO;
+  let remaining = limitMs;
+  let over = false;
+
+  function scores() {
+    return players.map((p) => p.game.score);
+  }
+
+  // `winner` is a player index, DRAW, or null to decide it on score.
+  function finish(reason, winner = null) {
+    if (over) return;
+    over = true;
+    const final = scores();
+    let result = winner;
+    if (result === null) {
+      if (final[0] === final[1]) result = DRAW;
+      else result = final[0] > final[1] ? 0 : 1;
+    }
+    for (const p of players) p.finish();
+    emitter.emit('matchover', { winner: result, reason, scores: final });
+  }
+
+  players.forEach((player, i) => {
+    const opponent = players[1 - i];
+    if (rule !== VERSUS_RULE.SOLO) {
+      player.game.on('garbage', ({ lines }) => opponent.receiveGarbage(lines));
+    }
+    player.game.on('gameover', () => {
+      if (over) return;
+      if (rule === VERSUS_RULE.SOLO) {
+        // Nobody is knocked out in a score race: the survivor plays on and
+        // the match ends when both boards are done (or the clock runs out).
+        if (players.every((p) => p.game.state === STATE.GAME_OVER)) finish('topout');
+      } else {
+        finish('knockout', 1 - i);
+      }
+    });
+  });
+
+  return {
+    on: emitter.on,
+    get over() {
+      return over;
+    },
+    get timed() {
+      return timed;
+    },
+    // Milliseconds left, or null when this rule has no clock.
+    get remainingMs() {
+      return timed ? Math.max(0, remaining) : null;
+    },
+    tick(dt) {
+      if (over || !timed) return;
+      // A paused board must not lose time.
+      if (!players.some((p) => p.game.state === STATE.PLAYING)) return;
+      remaining -= dt;
+      if (remaining <= 0) {
+        remaining = 0;
+        finish('time');
+      }
+    },
+    // Used by the "quit to menu" path so listeners are not left dangling.
+    abort() {
+      finish('aborted', DRAW);
+    },
+  };
+}
+return { DRAW, createMatch };
+})();
+const { DRAW, createMatch } = __m_core_match_js;
 
 
 // ---- src/config.js ----
@@ -738,6 +1214,12 @@ const BOARD = {
 // used to compute how much height is left for the board itself.
 const PAGE_CHROME_PX = 150;
 
+// Horizontal chrome per player column that is *not* a side panel: the frame
+// gap, the picture-frame border, and the page padding. Used with the measured
+// side widths to decide how wide a cell may be — which is what stops two
+// versus boards running off the edge of a narrow window.
+const BOARD_MARGIN_PX = 92;
+
 // Milliseconds per gravity step for a given level (1-based).
 function gravityMs(level) {
   return Math.max(1000 * Math.pow(0.82, level - 1), 55);
@@ -755,6 +1237,82 @@ const SCORING = {
   softDropPerCell: 1,
   hardDropPerCell: 2,
   linesPerLevel: 10,
+  // Versus only: junk rows sent to the opponent per clear. A single sends
+  // nothing, so chasing singles is punished rather than rewarded.
+  garbageLines: { 1: 0, 2: 1, 3: 2, 4: 4 },
+  // Extra junk for a combo run, indexed by combo - 1 and clamped to the last
+  // entry. A long run eventually outweighs the clear that carries it.
+  comboGarbage: [0, 0, 1, 1, 2, 2, 3, 4],
+};
+
+// The map mode's levels. Each pattern is drawn bottom-up as text: '#' is a
+// junk cell, '.' is empty, one string per row, aligned to the BOTTOM of the
+// board and exactly BOARD.cols wide. Clear every junk cell to advance.
+// `gravityScale` multiplies the fall delay — below 1 is faster.
+//
+// Drawing a new level needs no code: add an entry here.
+const MAP_LEVELS = [
+  {
+    name: 'Lily Pond 睡蓮池',
+    gravityScale: 1.4,
+    pattern: [
+      '.......###',
+      '....######',
+      '..########',
+    ],
+  },
+  {
+    name: 'Poplar Row 白楊',
+    gravityScale: 1.2,
+    pattern: [
+      '####.#####',
+      '####.#####',
+      '#####.####',
+      '#####.####',
+    ],
+  },
+  {
+    name: 'Haystacks 乾草堆',
+    gravityScale: 1,
+    pattern: [
+      '###....###',
+      '###.##.###',
+      '#..####..#',
+      '#.######.#',
+      '##.####.##',
+    ],
+  },
+  {
+    name: 'Rouen Façade 教堂',
+    gravityScale: 0.85,
+    pattern: [
+      '#########.',
+      '.#########',
+      '#########.',
+      '.#########',
+      '#########.',
+      '.#########',
+    ],
+  },
+  {
+    name: 'Water Lilies at Dusk 暮色',
+    gravityScale: 0.7,
+    pattern: [
+      '#####.####',
+      '####.#####',
+      '###.######',
+      '##.#######',
+      '#.########',
+      '.#########',
+      '#.########',
+      '##.#######',
+    ],
+  },
+];
+
+// Versus mode. Both clocked rules share one limit; the KO rule ignores it.
+const VERSUS = {
+  limitMs: 120000,
 };
 
 // Monet-inspired palette: pond blues, wisteria, ochre, willow green, lilac, poppy.
@@ -766,6 +1324,9 @@ const PALETTE = {
   S: '#8FAE6E',
   T: '#B287B6',
   Z: '#C9797B',
+  // Junk — map-mode levels and versus garbage. Deliberately the one stone-grey
+  // in a painted palette, so "not yours, dig it out" reads at a glance.
+  G: '#9A9187',
 };
 
 const CANVAS_STYLE = {
@@ -836,26 +1397,52 @@ const AUDIO = {
     4: { semitones: [-12, -5, 0, 7, 12, 19], attack: 0.055, decay: 3.2, gain: 0.5, type: 'triangle', spreadMs: 60 },
   },
 
+  // The No Brainer sacrifice: the game-over voicing without the finality —
+  // it drops, but it is quiet, short, and resolves. You lost a row, not a run.
+  rescue: { semitones: [-5, 0, 3], attack: 0.02, decay: 1.1, gain: 0.22, type: 'sine', spreadMs: 90 },
+
+  // Junk landing from the opponent: low, dull, and dry. Nothing to enjoy.
+  garbage: { semitones: [-12, -11], attack: 0.008, decay: 0.45, gain: 0.2, type: 'triangle', spreadMs: 30 },
+
   levelUp: { semitones: [0, 4, 7, 12, 16], attack: 0.012, decay: 1.6, gain: 0.26, type: 'sine', spreadMs: 70 },
   gameOver: { semitones: [0, -2, -4, -8], attack: 0.06, decay: 2.8, gain: 0.3, type: 'sine', spreadMs: 220 },
 };
 
+// Player one, and the global shortcuts. `/` doubles for rotate-CCW so this
+// whole set can be played from the right of the keyboard alone — which is
+// what makes room for player two in versus mode.
 const KEYS = {
   left: ['ArrowLeft'],
   right: ['ArrowRight'],
   softDrop: ['ArrowDown'],
   hardDrop: [' '],
   rotateCW: ['ArrowUp', 'x', 'X'],
-  rotateCCW: ['z', 'Z'],
+  rotateCCW: ['z', 'Z', '/'],
   hold: ['c', 'C', 'Shift'],
   pause: ['p', 'P', 'Escape'],
   restart: ['r', 'R'],
   start: ['Enter'],
   mute: ['m', 'M'],
 };
-return { BOARD, PAGE_CHROME_PX, gravityMs, TIMING, SCORING, PALETTE, CANVAS_STYLE, EFFECTS, AUDIO, KEYS };
+
+// Player two in versus mode: the left hand block, chosen so it shares no key
+// with KEYS above. Pause/restart/mute stay global on player one's set.
+//
+// Note this is a hardware limit, not a code one: cheap keyboards cannot
+// always report six simultaneous keys from two hands (key ghosting). Nothing
+// in software can fix that — see README.
+const KEYS_P2 = {
+  left: ['a', 'A'],
+  right: ['d', 'D'],
+  softDrop: ['s', 'S'],
+  hardDrop: ['w', 'W'],
+  rotateCW: ['e', 'E'],
+  rotateCCW: ['q', 'Q'],
+  hold: ['f', 'F'],
+};
+return { BOARD, PAGE_CHROME_PX, BOARD_MARGIN_PX, gravityMs, TIMING, SCORING, MAP_LEVELS, VERSUS, PALETTE, CANVAS_STYLE, EFFECTS, AUDIO, KEYS, KEYS_P2 };
 })();
-const { BOARD, PAGE_CHROME_PX, gravityMs, TIMING, SCORING, PALETTE, CANVAS_STYLE, EFFECTS, AUDIO, KEYS } = __m_config_js;
+const { BOARD, PAGE_CHROME_PX, BOARD_MARGIN_PX, gravityMs, TIMING, SCORING, MAP_LEVELS, VERSUS, PALETTE, CANVAS_STYLE, EFFECTS, AUDIO, KEYS, KEYS_P2 } = __m_config_js;
 const config = __m_config_js; // main.js uses 'import * as config'
 
 // ---- src/assets/loader.js ----
@@ -1183,7 +1770,18 @@ const __m_audio_loader_js = (() => {
 // Files are loaded through <audio> elements rather than fetch + decodeAudioData
 // because fetch is blocked on file://, where the double-clickable index.html runs.
 
-const AUDIO_CUES = ['lock', 'hardDrop', 'clear1', 'clear2', 'clear3', 'clear4', 'levelUp', 'gameOver'];
+const AUDIO_CUES = [
+  'lock',
+  'hardDrop',
+  'clear1',
+  'clear2',
+  'clear3',
+  'clear4',
+  'rescue',
+  'garbage',
+  'levelUp',
+  'gameOver',
+];
 
 const AUDIO_MANIFEST_VERSION = 1;
 
@@ -1407,6 +2005,14 @@ function createSound({ cfg, synth, samples = {}, storage = globalThis.localStora
       if (lift.sparkle && !muted && !samples[`clear${n}`]) {
         synth.chord(cfg.combo.sparkle, { semitoneShift: lift.semitoneShift });
       }
+    },
+    // The No Brainer bottom-row sacrifice.
+    onRescue() {
+      cue('rescue', cfg.rescue);
+    },
+    // Junk arriving from the versus opponent.
+    onGarbage() {
+      cue('garbage', cfg.garbage);
     },
     onLevelUp() {
       cue('levelUp', cfg.levelUp);
@@ -1950,23 +2556,32 @@ const { buildKeyMap, createKeyboard } = __m_input_keyboard_js;
 
 // ---- src/ui/hud.js ----
 const __m_ui_hud_js = (() => {
-// HUD: score / lines / level readouts, pause & game-over overlay, and the
+// HUD: score / lines / level readouts, the pause & game-over overlay, and the
 // localStorage high score. Pure DOM bindings — no game logic.
+//
+// One HUD per player. Everything is looked up with data attributes *inside*
+// the player's own column, so versus mode is simply two calls to createHud
+// rather than a second set of element ids.
 
 const STORAGE_KEY = 'tetrix.highscore';
 
-function createHud() {
+function createHud(root) {
+  const stat = (name) => root.querySelector(`[data-stat="${name}"]`);
   const el = {
-    score: document.getElementById('stat-score'),
-    lines: document.getElementById('stat-lines'),
-    level: document.getElementById('stat-level'),
-    high: document.getElementById('stat-high'),
-    sound: document.getElementById('stat-sound'),
-    overlay: document.getElementById('overlay'),
+    label: root.querySelector('[data-label]'),
+    score: stat('score'),
+    lines: stat('lines'),
+    level: stat('level'),
+    high: stat('high'),
+    sound: stat('sound'),
+    combo: stat('combo'),
+    objective: stat('objective'),
+    timer: stat('timer'),
+    overlay: root.querySelector('[data-overlay]'),
   };
 
   let high = Number(localStorage.getItem(STORAGE_KEY) || 0);
-  el.high.textContent = high;
+  if (el.high) el.high.textContent = high;
 
   // Only rewrite the overlay when its content actually changes, so buttons
   // inside it keep their identity (and hover/focus state) across frames.
@@ -1982,26 +2597,61 @@ function createHud() {
     }
   }
 
+  // An announcement (versus result, level cleared) outranks whatever the game
+  // state would have shown, until it is cleared with announce(null).
+  let announcement = null;
+
+  // A stat row is only meaningful in some modes; hiding the whole row keeps
+  // the panel from showing a permanently blank "Time".
+  function setRow(name, text) {
+    const node = el[name];
+    if (!node) return;
+    const row = node.closest('[data-row]') ?? node;
+    if (text === null || text === undefined) {
+      row.hidden = true;
+    } else {
+      row.hidden = false;
+      node.textContent = text;
+    }
+  }
+
   return {
     update(api) {
       const { game } = api;
       el.score.textContent = game.score;
       el.lines.textContent = game.lines;
       el.level.textContent = game.level;
-      if (game.score > high) {
+      if (el.high && game.score > high) {
         high = game.score;
         el.high.textContent = high;
       }
-      if (game.state === 'ready') {
-        setOverlay('ready', '<h2>Tetrix</h2><p>印象派俄羅斯方塊</p><button id="btn-start">Game Start</button><p class="hint">or press Enter · 或按 Enter</p>');
+      if (el.combo) setRow('combo', game.combo > 1 ? `×${game.combo}` : null);
+
+      if (announcement) {
+        setOverlay(announcement.key, announcement.html);
       } else if (game.state === 'paused') {
-        setOverlay('paused', '<h2>Paused</h2><p>Press P to resume · 按 P 繼續</p>');
+        setOverlay(
+          'paused',
+          '<h2>Paused</h2><p>Press P to resume · 按 P 繼續</p><button data-action="menu">Menu 選單</button>',
+        );
       } else if (game.state === 'gameover') {
-        setOverlay(`gameover-${game.score}`, `<h2>Game Over</h2><p>Score ${game.score}</p><button id="btn-start">Play Again 再玩一次</button><p class="hint">or press R · 或按 R</p>`);
+        setOverlay(
+          `gameover-${game.score}`,
+          `<h2>Game Over</h2><p>Score ${game.score}</p><button data-action="restart">Play Again 再玩一次</button><button data-action="menu">Menu 選單</button><p class="hint">or press R · 或按 R</p>`,
+        );
       } else {
         setOverlay(null, null);
       }
     },
+    // Take over this player's overlay; announce(null) hands it back to update().
+    announce(key, html) {
+      announcement = key === null ? null : { key, html };
+      if (key === null) setOverlay(null, null);
+    },
+    setLabel(text) {
+      if (el.label) el.label.textContent = text;
+    },
+    setRow,
     saveHighScore(score) {
       if (score >= high) localStorage.setItem(STORAGE_KEY, String(score));
     },
@@ -2017,81 +2667,176 @@ return { createHud };
 const { createHud } = __m_ui_hud_js;
 
 
+// ---- src/ui/menu.js ----
+const __m_ui_menu_js = (() => {
+// The start screen: pick a mode, then any options that mode needs, then play.
+// Pure DOM — it reports a choice through `onStart` and knows nothing about how
+// a game is built.
+
+
+const MODE_CARDS = [
+  {
+    mode: MODE.CLASSIC,
+    title: 'Classic 經典',
+    desc: 'The original endless run. 原本的無盡模式。',
+  },
+  {
+    mode: MODE.NO_BRAINER,
+    title: 'No Brainer 無腦模式',
+    desc: 'It never ends. Reach the ceiling and the bottom row is sacrificed instead. 永遠不會結束；堆到頂就犧牲最底下一行。',
+  },
+  {
+    mode: MODE.MAP,
+    title: 'Map 地圖闖關',
+    desc: 'Dig the stone out of each level to advance. 把每關的石塊全部清光才過關。',
+  },
+  {
+    mode: MODE.VERSUS,
+    title: 'Versus 雙人對戰',
+    desc: 'Two players, one keyboard. 同一個鍵盤，兩個人對打。',
+  },
+];
+
+const RULE_CARDS = [
+  {
+    rule: VERSUS_RULE.KO,
+    title: 'Knockout 擊倒',
+    desc: 'Clears send junk to your opponent. First one to the ceiling loses. 消行送垃圾給對手，先堆到頂的人輸。',
+  },
+  {
+    rule: VERSUS_RULE.TIMED,
+    title: 'Timed 計時對戰',
+    desc: 'Junk flies both ways on a two-minute clock; highest score wins, but topping out loses immediately. 一樣送垃圾，兩分鐘後比分數，中途頂線直接輸。',
+  },
+  {
+    rule: VERSUS_RULE.SOLO,
+    title: 'Score Race 各自計分',
+    desc: 'No junk. Two minutes, highest score wins. 互不干擾，兩分鐘內比分數。',
+  },
+];
+
+function cardList(items, attr) {
+  return items
+    .map(
+      (item, i) =>
+        `<li><button class="mode-btn" data-${attr}="${item[attr]}">` +
+        `<strong><span class="num">${i + 1}</span>${item.title}</strong>` +
+        `<span class="desc">${item.desc}</span></button></li>`,
+    )
+    .join('');
+}
+
+function createMenu({ root, onStart }) {
+  let screen = null; // 'modes' | 'versus' | null (hidden)
+
+  function render() {
+    if (screen === 'modes') {
+      root.innerHTML =
+        '<div class="menu-card"><h2>Tetrix</h2><p class="subtitle">choose a mode · 選擇模式</p>' +
+        `<ul class="mode-list">${cardList(MODE_CARDS, 'mode')}</ul>` +
+        '<p class="hint">1–4 or click · 按數字鍵或點選</p>' +
+        '<p class="hint">More modes are on the way · 更多模式陸續加入</p></div>';
+    } else if (screen === 'versus') {
+      root.innerHTML =
+        '<div class="menu-card"><h2>Versus 雙人對戰</h2><p class="subtitle">choose the rules · 選擇規則</p>' +
+        `<ul class="mode-list">${cardList(RULE_CARDS, 'rule')}</ul>` +
+        '<p class="controls-note">P1 ← ↑ → ↓ · Space · Shift &nbsp;|&nbsp; P2 A W D S · E/Q · F</p>' +
+        '<button class="mode-back" data-back>← Back 返回</button></div>';
+    }
+    root.classList.toggle('hidden', screen === null);
+  }
+
+  function choose(mode) {
+    if (mode === MODE.VERSUS) {
+      screen = 'versus';
+      render();
+      return;
+    }
+    screen = null;
+    render();
+    onStart({ mode });
+  }
+
+  root.addEventListener('click', (e) => {
+    const back = e.target.closest('[data-back]');
+    if (back) {
+      screen = 'modes';
+      render();
+      return;
+    }
+    const btn = e.target.closest('[data-mode], [data-rule]');
+    if (!btn) return;
+    if (btn.dataset.mode) {
+      choose(btn.dataset.mode);
+    } else {
+      screen = null;
+      render();
+      onStart({ mode: MODE.VERSUS, rule: btn.dataset.rule });
+    }
+  });
+
+  return {
+    get open() {
+      return screen !== null;
+    },
+    show() {
+      screen = 'modes';
+      render();
+    },
+    hide() {
+      screen = null;
+      render();
+    },
+    // Digit shortcuts. Returns true if the key was consumed, so the caller
+    // knows not to pass it on to the game.
+    handleKey(key) {
+      if (screen === null) return false;
+      if (key === 'Escape' && screen === 'versus') {
+        screen = 'modes';
+        render();
+        return true;
+      }
+      const n = Number(key);
+      if (!Number.isInteger(n) || n < 1) return false;
+      if (screen === 'modes') {
+        const card = MODE_CARDS[n - 1];
+        if (!card) return false;
+        choose(card.mode);
+        return true;
+      }
+      const card = RULE_CARDS[n - 1];
+      if (!card) return false;
+      screen = null;
+      render();
+      onStart({ mode: MODE.VERSUS, rule: card.rule });
+      return true;
+    },
+  };
+}
+return { createMenu };
+})();
+const { createMenu } = __m_ui_menu_js;
+
+
 // ---- src/main.js ----
-// Composition root: builds the game core, renderer, particles, input and
-// HUD, wires them together, and runs the requestAnimationFrame loop.
+// Composition root: builds the mode menu, then a *session* — one or two
+// players, each with a game core, renderer, particles, input and HUD — and
+// runs the requestAnimationFrame loop over it.
 // This is the ONLY file that knows about every module.
 
 
-const boardCanvas = document.getElementById('board');
-const effectsCanvas = document.getElementById('effects');
-const nextCanvas = document.getElementById('next');
-const holdCanvas = document.getElementById('hold');
+const frame = document.getElementById('frame');
+const playerTemplate = document.getElementById('player-template');
 
 installBackground(document.getElementById('background'), config.CANVAS_STYLE);
 
-const gameApi = createGame({
-  board: config.BOARD,
-  timing: config.TIMING,
-  scoring: config.SCORING,
-  gravityMs: config.gravityMs,
-});
-
-// The board must fit the window: shrink the cell size (and thus repaint the
-// sprites and resize every canvas) whenever the viewport demands it.
-const preferredCellSize = config.BOARD.cellSize;
-
-function fitCellSize() {
-  const available = window.innerHeight - config.PAGE_CHROME_PX;
-  const fit = Math.floor(available / config.BOARD.rows);
-  return Math.max(config.BOARD.minCellSize, Math.min(preferredCellSize, fit));
-}
-
-let sprites;
-let renderer;
-let particles;
-let skinImages = {}; // filled in later if assets/manifest.js names a usable skin
-
-function buildRenderers() {
-  config.BOARD.cellSize = fitCellSize();
-  sprites = createSprites(config.PALETTE, config.BOARD.cellSize, skinImages);
-  renderer = createRenderer({ boardCanvas, nextCanvas, holdCanvas, sprites, config });
-  effectsCanvas.width = boardCanvas.width;
-  effectsCanvas.height = boardCanvas.height;
-  particles = createParticles(effectsCanvas, config.EFFECTS);
-}
-
-buildRenderers();
-
-// External artwork is an upgrade, never a gate: the painted sprites are already
-// on screen, and we only repaint once (and if) the images actually arrive.
-loadSkin().then(({ skinName, images }) => {
-  if (Object.keys(images).length === 0) return;
-  skinImages = images;
-  buildRenderers();
-  renderer.draw(gameApi);
-  console.info(`[tetrix/assets] skin "${skinName}" applied (${Object.keys(images).length} pieces)`);
-});
-
-let resizeTimer = null;
-window.addEventListener('resize', () => {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    buildRenderers();
-    renderer.draw(gameApi);
-  }, 150);
-});
-
-const hud = createHud();
-
-// Sound is synthesised, so it needs no files and is ready immediately. The
+// ---------------------------------------------------------------- sound ----
+// Synthesised, so it is ready immediately and is shared by both players. The
 // samples object is filled in later only if assets/audio/manifest.js names
 // overrides; createSound holds the reference, so cues switch over in place.
 const audioSamples = {};
 const synth = createSynth(config.AUDIO);
 const sound = createSound({ cfg: config.AUDIO, synth, samples: audioSamples });
-
-hud.showMuted(sound.muted);
 
 loadAudioSet().then(({ setName, samples }) => {
   const names = Object.keys(samples);
@@ -2100,87 +2845,366 @@ loadAudioSet().then(({ setName, samples }) => {
   console.info(`[tetrix/audio] set "${setName}" applied (${names.join(', ')})`);
 });
 
-gameApi.game.on('lineclear', ({ cells, count, combo }) => {
-  particles.burst(cells, config.BOARD.cellSize);
-  sound.onLineClear({ count, combo });
-});
-gameApi.game.on('harddrop', ({ distance }) => sound.onHardDrop({ distance }));
-gameApi.game.on('lock', () => sound.onLock());
-gameApi.game.on('levelup', () => sound.onLevelUp());
-gameApi.game.on('gameover', ({ score }) => {
-  hud.saveHighScore(score);
-  sound.onGameOver();
-});
-
-// Start from the ready screen, or begin a fresh game after game over.
-function startOrRestart() {
-  sound.resume(); // browsers only allow audio to start from a user gesture
-  if (gameApi.game.state === 'ready') gameApi.start();
-  else if (gameApi.game.state === 'gameover') gameApi.reset();
-}
-
-// Any interaction counts as the gesture, so sound also works for a player who
-// starts with Enter or dives straight into the keyboard.
+// Browsers only allow audio to start from a user gesture.
 for (const evt of ['keydown', 'pointerdown']) {
   window.addEventListener(evt, () => sound.resume(), { once: true });
 }
 
-const keyboard = createKeyboard({
-  keys: config.KEYS,
-  timing: config.TIMING,
-  actions: {
-    left: () => gameApi.moveLeft(),
-    right: () => gameApi.moveRight(),
-    softDrop: () => gameApi.softDrop(),
-    hardDrop: () => gameApi.hardDrop(),
-    rotateCW: () => gameApi.rotate(1),
-    rotateCCW: () => gameApi.rotate(-1),
-    hold: () => gameApi.hold(),
-    pause: () => gameApi.togglePause(),
-    restart: () => {
-      if (gameApi.game.state !== 'ready') gameApi.reset();
+// --------------------------------------------------------------- sprites ---
+const preferredCellSize = config.BOARD.cellSize;
+let sprites = null;
+let skinImages = {}; // filled in later if assets/manifest.js names a usable skin
+
+// The board must fit the window. Height is the usual constraint; versus puts
+// two boards side by side, so width can be the binding one instead.
+function fitCellSize(playerCount) {
+  const byHeight = Math.floor((window.innerHeight - config.PAGE_CHROME_PX) / config.BOARD.rows);
+  let chrome = 0;
+  for (const side of frame.querySelectorAll('.side')) chrome += side.offsetWidth;
+  chrome += config.BOARD_MARGIN_PX * playerCount;
+  const byWidth = Math.floor((window.innerWidth - chrome) / (config.BOARD.cols * playerCount));
+  return Math.max(config.BOARD.minCellSize, Math.min(preferredCellSize, byHeight, byWidth));
+}
+
+// ------------------------------------------------------------- the session -
+// Everything that belongs to one run of one mode. Replaced wholesale when the
+// player picks a different mode, which is why nothing outside it holds a
+// reference to a game.
+let session = null;
+// Set while an announcement is waiting to be dismissed (level cleared, match
+// over). Enter or the overlay button runs it.
+let pendingContinue = null;
+
+function buildPlayer(index, count, mode) {
+  const root = playerTemplate.content.firstElementChild.cloneNode(true);
+  // Each column shows only its own player's keys.
+  const wanted = String(index + 1);
+  for (const panel of root.querySelectorAll('[data-controls]')) {
+    if (panel.dataset.controls !== wanted) panel.remove();
+  }
+  frame.appendChild(root);
+
+  const canvas = (name) => root.querySelector(`[data-canvas="${name}"]`);
+  const api = createGame({
+    board: config.BOARD,
+    timing: config.TIMING,
+    scoring: config.SCORING,
+    gravityMs: config.gravityMs,
+    rules: rulesFor(mode),
+  });
+
+  const player = {
+    index,
+    root,
+    api,
+    hud: createHud(root),
+    canvases: {
+      board: canvas('board'),
+      effects: canvas('effects'),
+      next: canvas('next'),
+      hold: canvas('hold'),
     },
-    start: startOrRestart,
-    mute: () => hud.showMuted(sound.toggleMute()),
+    renderer: null,
+    particles: null,
+    keyboard: null,
+  };
+
+  // Player one carries the global shortcuts (pause / restart / mute); player
+  // two only ever moves a piece.
+  const actions = {
+    left: () => api.moveLeft(),
+    right: () => api.moveRight(),
+    softDrop: () => api.softDrop(),
+    hardDrop: () => api.hardDrop(),
+    rotateCW: () => api.rotate(1),
+    rotateCCW: () => api.rotate(-1),
+    hold: () => api.hold(),
+  };
+  if (index === 0) {
+    Object.assign(actions, {
+      pause: () => api.togglePause(),
+      restart: () => restartSession(),
+      start: () => pendingContinue?.(),
+      mute: () => {
+        const muted = sound.toggleMute();
+        for (const p of session.players) p.hud.showMuted(muted);
+      },
+    });
+  }
+  player.keyboard = createKeyboard({
+    keys: index === 0 ? config.KEYS : config.KEYS_P2,
+    timing: config.TIMING,
+    actions,
+  });
+
+  return player;
+}
+
+// Sprites and canvas sizes depend on the cell size, which depends on the
+// window and the number of boards — so this reruns on resize too.
+function buildRenderers() {
+  if (!session) return;
+  config.BOARD.cellSize = fitCellSize(session.players.length);
+  sprites = createSprites(config.PALETTE, config.BOARD.cellSize, skinImages);
+  for (const p of session.players) {
+    p.renderer = createRenderer({
+      boardCanvas: p.canvases.board,
+      nextCanvas: p.canvases.next,
+      holdCanvas: p.canvases.hold,
+      sprites,
+      config,
+    });
+    p.canvases.effects.width = p.canvases.board.width;
+    p.canvases.effects.height = p.canvases.board.height;
+    p.particles = createParticles(p.canvases.effects, config.EFFECTS);
+  }
+}
+
+function wireEvents(player, mode) {
+  const { api, hud } = player;
+  api.game.on('lineclear', ({ cells, count, combo }) => {
+    player.particles.burst(cells, config.BOARD.cellSize);
+    sound.onLineClear({ count, combo });
+    if (mode === MODE.MAP && api.garbageLeft() === 0) levelCleared(player);
+  });
+  api.game.on('harddrop', ({ distance }) => sound.onHardDrop({ distance }));
+  api.game.on('lock', () => sound.onLock());
+  api.game.on('levelup', () => sound.onLevelUp());
+  api.game.on('rescue', ({ cells }) => {
+    player.particles.burst(cells, config.BOARD.cellSize);
+    sound.onRescue();
+  });
+  api.game.on('garbagelanded', () => sound.onGarbage());
+  api.game.on('gameover', ({ score }) => {
+    if (mode !== MODE.VERSUS) hud.saveHighScore(score);
+    sound.onGameOver();
+  });
+}
+
+// ------------------------------------------------------------- map mode ----
+function loadLevel(player) {
+  const level = session.campaign.level;
+  player.api.loadPattern(level.pattern);
+  player.api.setRules({ gravityScale: level.gravityScale });
+  player.hud.setRow('objective', String(player.api.garbageLeft()));
+  player.hud.setLabel(`Level ${session.campaign.index + 1}/${session.campaign.total} · ${level.name}`);
+}
+
+function levelCleared(player) {
+  const campaign = session.campaign;
+  if (!campaign.advance()) {
+    player.api.finish();
+    player.hud.announce(
+      'campaign',
+      `<h2>All Clear</h2><p>每一關都通過了！</p><p>Score ${player.api.game.score}</p>` +
+        '<button data-action="restart">Play Again 再玩一次</button><button data-action="menu">Menu 選單</button>',
+    );
+    return;
+  }
+  loadLevel(player);
+  player.api.togglePause(); // hold the celebration until the player is ready
+  player.hud.announce(
+    `level-${campaign.index}`,
+    `<h2>Level ${campaign.index + 1}</h2><p>${campaign.level.name}</p>` +
+      '<button data-action="continue">Continue 繼續</button><p class="hint">or press Enter · 或按 Enter</p>',
+  );
+  pendingContinue = () => {
+    pendingContinue = null;
+    player.hud.announce(null);
+    player.api.togglePause();
+  };
+}
+
+// -------------------------------------------------------------- versus -----
+function versusResult(winner, reason, scores) {
+  const reasons = {
+    knockout: 'Knockout 擊倒',
+    time: "Time's up 時間到",
+    topout: 'Both boards are done 兩邊都結束了',
+    aborted: 'Match abandoned 中止',
+  };
+  const tail =
+    '<button data-action="restart">Rematch 再一場</button><button data-action="menu">Menu 選單</button>';
+  for (const p of session.players) {
+    const head =
+      winner === DRAW ? '<h2>Draw 平手</h2>' : `<h2>${winner === p.index ? 'Winner 勝' : 'Defeat 敗'}</h2>`;
+    p.hud.announce(
+      'result',
+      `${head}<p>${reasons[reason] ?? reason}</p><p>${scores[0]} — ${scores[1]}</p>${tail}`,
+    );
+  }
+}
+
+function formatClock(ms) {
+  const total = Math.ceil(ms / 1000);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+// ------------------------------------------------------------- lifecycle ---
+function destroySession() {
+  if (!session) return;
+  // No teardown call on the match: it owns no timers, and every listener it
+  // registered lives on emitters that are discarded with the session.
+  for (const p of session.players) p.keyboard.destroy();
+  frame.innerHTML = '';
+  session = null;
+  pendingContinue = null;
+}
+
+function startSession({ mode, rule }) {
+  destroySession();
+  const count = mode === MODE.VERSUS ? 2 : 1;
+  frame.classList.toggle('two-up', count === 2);
+
+  session = { mode, rule, players: [], campaign: null, match: null };
+  for (let i = 0; i < count; i++) session.players.push(buildPlayer(i, count, mode));
+  buildRenderers();
+  for (const p of session.players) wireEvents(p, mode);
+
+  for (const p of session.players) {
+    p.hud.showMuted(sound.muted);
+    p.hud.setRow('combo', null);
+    p.hud.setRow('objective', null);
+    p.hud.setRow('timer', null);
+  }
+
+  if (mode === MODE.MAP) {
+    session.campaign = createCampaign({ levels: config.MAP_LEVELS });
+    loadLevel(session.players[0]);
+  } else if (mode === MODE.VERSUS) {
+    session.match = createMatch({
+      players: session.players.map((p) => p.api),
+      rule,
+      limitMs: config.VERSUS.limitMs,
+    });
+    session.match.on('matchover', ({ winner, reason, scores }) => versusResult(winner, reason, scores));
+    session.players.forEach((p, i) => {
+      p.hud.setLabel(`Player ${i + 1}`);
+      p.hud.setRow('high', null); // a duel is not a personal best
+    });
+  } else if (mode === MODE.NO_BRAINER) {
+    session.players[0].hud.setLabel('No Brainer 無腦模式');
+  }
+
+  for (const p of session.players) p.api.start();
+  sound.resume();
+}
+
+function restartSession() {
+  if (!session) return;
+  pendingContinue = null;
+  // A versus match is stateful beyond the two boards (clock, winner), so a
+  // rematch is a fresh session rather than two resets.
+  if (session.mode === MODE.VERSUS) {
+    startSession({ mode: session.mode, rule: session.rule });
+    return;
+  }
+  // Restore the level layout *before* resetting, so reset() spawns onto the
+  // board the player is about to replay rather than an empty one. Playing
+  // again after the last level means starting the campaign over — there is no
+  // current level to restore.
+  if (session.mode === MODE.MAP) {
+    if (session.campaign.complete) session.campaign.reset();
+    loadLevel(session.players[0]);
+  }
+  for (const p of session.players) {
+    p.hud.announce(null);
+    p.api.reset();
+  }
+}
+
+function toMenu() {
+  destroySession();
+  frame.classList.remove('two-up');
+  menu.show();
+}
+
+const menu = createMenu({ root: document.getElementById('menu'), onStart: startSession });
+
+frame.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  if (btn.dataset.action === 'continue') pendingContinue?.();
+  else if (btn.dataset.action === 'restart') restartSession();
+  else if (btn.dataset.action === 'menu') toMenu();
+});
+
+// The menu owns the keyboard while it is open, so a digit choosing a mode is
+// never also a game input.
+window.addEventListener(
+  'keydown',
+  (e) => {
+    if (menu.handleKey(e.key)) e.preventDefault();
   },
+  true,
+);
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(buildRenderers, 150);
 });
 
-document.getElementById('overlay').addEventListener('click', (e) => {
-  if (e.target.id === 'btn-start') startOrRestart();
+// External artwork is an upgrade, never a gate: the painted sprites are already
+// on screen, and we only repaint once (and if) the images actually arrive.
+loadSkin().then(({ skinName, images }) => {
+  if (Object.keys(images).length === 0) return;
+  skinImages = images;
+  buildRenderers();
+  console.info(`[tetrix/assets] skin "${skinName}" applied (${Object.keys(images).length} pieces)`);
 });
 
-// Paint the first frame synchronously so the start screen is visible even
-// before requestAnimationFrame begins (e.g. hidden/backgrounded panes).
-renderer.draw(gameApi);
-hud.update(gameApi);
+menu.show();
 
 let last = performance.now();
-function frame(now) {
+function tickFrame(now) {
   const dt = Math.min(now - last, 100); // clamp huge tab-switch deltas
   last = now;
 
-  keyboard.update(dt);
-  gameApi.tick(dt);
-  particles.update(dt);
+  if (session) {
+    for (const p of session.players) {
+      p.keyboard.update(dt);
+      p.api.tick(dt);
+      p.particles.update(dt);
+    }
+    if (session.match) {
+      session.match.tick(dt);
+      const left = session.match.remainingMs;
+      for (const p of session.players) p.hud.setRow('timer', left === null ? null : formatClock(left));
+    }
+    if (session.mode === MODE.MAP) {
+      const p = session.players[0];
+      p.hud.setRow('objective', String(p.api.garbageLeft()));
+    }
+    for (const p of session.players) {
+      p.renderer.draw(p.api);
+      p.particles.draw();
+      p.hud.update(p.api);
+    }
+  }
 
-  renderer.draw(gameApi);
-  particles.draw();
-  hud.update(gameApi);
-
-  requestAnimationFrame(frame);
+  requestAnimationFrame(tickFrame);
 }
-requestAnimationFrame(frame);
+requestAnimationFrame(tickFrame);
 
 // Debug/testing handle (used by automated verification; harmless in prod).
 // The audio entry exposes the schedulers so cues can be rendered into an
 // OfflineAudioContext and measured — that is how the sound design is verified.
 window.__tetrix = {
-  gameApi,
-  particles,
-  renderer,
-  hud,
+  get session() {
+    return session;
+  },
+  get gameApi() {
+    return session?.players[0].api ?? null;
+  },
+  startSession,
+  toMenu,
+  menu,
   config,
   sound,
+  STATE,
+  MODE,
+  VERSUS_RULE,
   audio: { synth, scheduleChord, scheduleGlide, createBus, semitoneHz, comboLift },
 };
 </script>

@@ -20,19 +20,12 @@ body {
   z-index: -1;
 }
 
-.frame {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 20px;
-  padding: 24px 16px;
-}
-
-.stage {
+.masthead {
   text-align: center;
+  padding-top: 18px;
 }
 
-.stage h1 {
+.masthead h1 {
   font-size: 2rem;
   font-weight: normal;
   letter-spacing: 0.35em;
@@ -46,6 +39,35 @@ body {
   margin-bottom: 10px;
 }
 
+/* Holds one player column, or two side by side in versus. */
+.frame {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 28px;
+  padding: 8px 16px;
+}
+
+.player {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.board-column {
+  text-align: center;
+}
+
+/* Only shown in versus, where the two boards need telling apart. */
+.player-label {
+  font-size: 0.85rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  min-height: 1.2em;
+  margin-bottom: 4px;
+}
+
 .board-wrap {
   position: relative;
   display: inline-block;
@@ -55,11 +77,11 @@ body {
   background: #fcf9f0;
 }
 
-#board {
+[data-canvas='board'] {
   display: block;
 }
 
-#effects {
+[data-canvas='effects'] {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -75,6 +97,8 @@ body {
   gap: 8px;
   background: rgba(252, 249, 240, 0.82);
   backdrop-filter: blur(2px);
+  text-align: center;
+  padding: 12px;
 }
 
 .overlay h2 {
@@ -88,7 +112,8 @@ body {
   display: none;
 }
 
-.overlay button {
+.overlay button,
+.menu button {
   font-family: inherit;
   font-size: 1rem;
   letter-spacing: 0.15em;
@@ -101,7 +126,8 @@ body {
   transition: background 0.15s ease, transform 0.15s ease;
 }
 
-.overlay button:hover {
+.overlay button:hover,
+.menu button:hover {
   background: #f2e3c0;
   transform: scale(1.04);
 }
@@ -116,7 +142,6 @@ body {
   flex-direction: column;
   gap: 16px;
   width: 150px;
-  padding-top: 78px;
 }
 
 .panel {
@@ -160,4 +185,124 @@ body {
 
 .controls dd {
   opacity: 0.8;
+}
+
+/* Versus puts two full columns on screen. The gap *between* the players has
+   to beat the gap *inside* one of them, or the two boards read as one wide
+   instrument panel rather than as two opponents. */
+.frame.two-up {
+  gap: 46px;
+}
+
+.frame.two-up .player {
+  gap: 10px;
+}
+
+.frame.two-up .side {
+  width: 108px;
+}
+
+/* Mirror the second player so the layout is symmetrical: keys on the two
+   outer edges, the two score panels facing each other in the middle where
+   they are easy to compare mid-duel. */
+.frame.two-up .player:last-child {
+  flex-direction: row-reverse;
+}
+
+.frame.two-up .panel {
+  padding: 8px;
+}
+
+.frame.two-up .stats .stat {
+  font-size: 1.05rem;
+  margin-bottom: 6px;
+}
+
+/* The mode picker: a full-page wash so it reads as a title screen rather
+   than a dialog stuck on top of a game. */
+.menu {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(246, 241, 227, 0.9);
+  backdrop-filter: blur(3px);
+  z-index: 10;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.menu.hidden {
+  display: none;
+}
+
+.menu-card {
+  background: rgba(252, 249, 240, 0.92);
+  border: 1px solid rgba(160, 138, 102, 0.6);
+  box-shadow: 0 10px 40px rgba(74, 64, 56, 0.25);
+  padding: 26px 30px;
+  width: min(560px, 100%);
+  text-align: center;
+}
+
+.menu-card h2 {
+  font-size: 1.9rem;
+  font-weight: normal;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+.mode-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 18px 0 14px;
+}
+
+.menu .mode-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.mode-btn strong {
+  display: block;
+  font-weight: normal;
+  letter-spacing: 0.12em;
+}
+
+.mode-btn .num {
+  display: inline-block;
+  width: 1.6em;
+  opacity: 0.55;
+}
+
+.mode-btn .desc {
+  display: block;
+  font-size: 0.78rem;
+  opacity: 0.7;
+  line-height: 1.45;
+  margin-top: 3px;
+  padding-left: 1.6em;
+}
+
+.menu .hint {
+  font-size: 0.78rem;
+  opacity: 0.6;
+}
+
+.menu .controls-note {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  margin-bottom: 4px;
+}
+
+.menu .mode-back {
+  font-size: 0.85rem;
+  padding: 6px 18px;
 }

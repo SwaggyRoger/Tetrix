@@ -44,26 +44,61 @@ Tests cover `src/core/` (pure logic) and the `assets/manifest.js` validation
 rules. Rendering/effects are verified visually — see `docs/plans/` for the
 verification checklist.
 
+## Modes 模式
+
+Pick one on the start screen (click, or press `1`–`4`).
+
+| Mode | What it is |
+|---|---|
+| **Classic 經典** | The original endless run. |
+| **No Brainer 無腦模式** | Never ends. Reaching the ceiling sacrifices the **bottom** row instead of ending the game — everything above falls one row and play continues. 堆到頂時最底下一行直接消失。 |
+| **Map 地圖闖關** | Five hand-drawn levels of stone. Clear every stone cell to advance; each level is faster than the last. 把石塊全部清光才過關。 |
+| **Versus 雙人對戰** | Two players on one keyboard, side by side, with a choice of three rule sets. |
+
+Versus rules:
+
+| Rule | Junk | Ends when |
+|---|---|---|
+| **Knockout 擊倒** | yes | someone tops out — the survivor wins |
+| **Timed 計時對戰** | yes | two minutes, or a top-out (which loses immediately) |
+| **Score Race 各自計分** | no | two minutes; the higher score wins |
+
+Clearing 2/3/4 rows sends 1/2/4 junk rows across, plus a bonus that grows with
+the combo run. Clearing lines **cancels** junk already flying at you before any
+is forwarded, so attacking is also how you defend.
+
+New map levels need no code — draw one as text in `MAP_LEVELS` in
+`src/config.js`.
+
 ## Controls
 
-| Key | Action |
-|---|---|
-| ← → | Move 移動 |
-| ↑ / X | Rotate clockwise 順時針旋轉 |
-| Z | Rotate counter-clockwise 逆時針旋轉 |
-| ↓ | Soft drop 緩降 |
-| Space | Hard drop 直落 |
-| C / Shift | Hold 保留方塊 |
-| P / Esc | Pause 暫停 |
-| R | Restart 重新開始 |
-| M | Mute 靜音 |
-| Enter | Start / Play again 開始 |
+| Key | Action | | Player 2 (versus) |
+|---|---|---|---|
+| ← → | Move 移動 | | A D |
+| ↑ / X | Rotate clockwise 順時針旋轉 | | E |
+| Z / / | Rotate counter-clockwise 逆時針旋轉 | | Q |
+| ↓ | Soft drop 緩降 | | S |
+| Space | Hard drop 直落 | | W |
+| C / Shift | Hold 保留方塊 | | F |
+| P / Esc | Pause 暫停 | | — |
+| R | Restart 重新開始 | | — |
+| M | Mute 靜音 | | — |
+| Enter | Continue 繼續 | | — |
+
+Player one's whole set can be played from the right of the keyboard (arrows,
+Space, right Shift, `/`), which is what leaves the left hand free for player
+two. Pause, restart and mute stay global on player one's keys.
+
+> **Versus and cheap keyboards.** Many keyboards cannot report six keys from
+> two hands at once (key ghosting / limited rollover). That is a hardware
+> limit — no code change can fix it. If player two's inputs drop while player
+> one is holding a direction, try a different keyboard.
 
 ## Architecture 架構
 
 ```
 index.html            GENERATED single-file build — double-click to play
-dev.html              development entry page (5 canvases + HUD markup)
+dev.html              development entry page (masthead, mode menu, <template> for one player column)
 build.mjs             zero-dependency bundler: dev.html + styles.css + src/ → index.html
 styles.css            page chrome only — game visuals are all canvas
 assets/               ★ YOUR media — drop files in, no build step
@@ -85,8 +120,10 @@ src/
 ├── core/             PURE game logic. No DOM, no canvas. Runs in Node.
 │   ├── tetromino.js  shapes, rotation states, SRS wall-kick tables
 │   ├── bag.js        7-bag randomizer (RNG injectable for tests)
-│   ├── board.js      grid, collision, line detect/clear
-│   ├── game.js       state machine: gravity, lock delay, scoring, hold
+│   ├── board.js      grid, collision, line detect/clear, junk rows, level patterns
+│   ├── game.js       state machine: gravity, lock delay, scoring, hold, mode rules
+│   ├── modes.js      what the modes are + the map mode's level progression
+│   ├── match.js      versus: routes junk between two games, clock, who won
 │   └── emitter.js    tiny pub/sub so core can announce events
 ├── render/           reads game state, draws it. Never mutates game state.
 │   ├── sprites.js    impressionist cell painting (pre-rendered offscreen)
@@ -97,9 +134,11 @@ src/
 ├── input/
 │   └── keyboard.js   key mapping + DAS auto-repeat (actions injected)
 └── ui/
-    └── hud.js        score/level/lines DOM bindings, overlay, high score
+    ├── hud.js        per-player score/level/lines bindings, overlay, high score
+    └── menu.js       the start screen: pick a mode, then its options
 tests/
 ├── core.test.mjs     node --test unit tests over src/core/
+├── modes.test.mjs    rescue rule, level patterns, junk exchange, match rules
 ├── assets.test.mjs   artwork manifest validation rules (pure, no DOM)
 └── audio.test.mjs    audio manifest rules + combo/solemnity invariants
 docs/plans/           decision records & implementation plans per feature
@@ -159,8 +198,12 @@ the artwork one, so sound and skins never interfere.
 ## Debugging
 
 The running game exposes
-`window.__tetrix = { gameApi, particles, renderer, hud, config, sound, audio }`
+`window.__tetrix = { session, gameApi, startSession, toMenu, menu, config, sound, audio }`
 in the console — you can inspect state, force pieces, or trigger bursts.
+`session` is the current run: `session.players[i]` carries that player's
+`api`, `hud`, `renderer` and `particles`; `gameApi` is shorthand for player
+one. `startSession({ mode, rule })` jumps straight into a mode — but call
+`menu.hide()` too if you invoked it while the menu was still up.
 
 `audio` carries the schedulers (`scheduleChord`, `scheduleGlide`, `createBus`),
 which take any context. Render a cue into an `OfflineAudioContext` and you can
