@@ -14,7 +14,25 @@ export const STATE = {
   GAME_OVER: 'gameover',
 };
 
-export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } = {}) {
+// Cell type used for junk: the map mode's pre-built levels and the versus
+// mode's incoming garbage rows. It is not a tetromino, so it can never be
+// spawned — it only ever arrives on the board already placed.
+export const GARBAGE = 'G';
+
+// `rules` is what makes one mode differ from another. The defaults reproduce
+// classic play exactly, so a mode only has to name what it changes.
+export const DEFAULT_RULES = {
+  // 'gameover' ends the run at the ceiling; 'rescue' sacrifices the bottom
+  // row instead and plays on forever (the No Brainer mode).
+  topOut: 'gameover',
+  // Versus only: line clears send junk rows to the opponent.
+  sendsGarbage: false,
+  // Multiplies every gravity step. > 1 is slower, < 1 is faster; this is the
+  // hook a future hard mode raises.
+  gravityScale: 1,
+};
+
+export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng, rules } = {}) {
   const cols = boardCfg?.cols ?? 10;
   const rows = boardCfg?.rows ?? 20;
   const lockDelayMs = timing?.lockDelayMs ?? 500;
@@ -23,6 +41,11 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
   const hardDropPerCell = scoring?.hardDropPerCell ?? 2;
   const linesPerLevel = scoring?.linesPerLevel ?? 10;
   const gravityFn = gravityMs ?? ((level) => Math.max(1000 * 0.82 ** (level - 1), 55));
+  const garbageTable = scoring?.garbageLines ?? { 1: 0, 2: 1, 3: 2, 4: 4 };
+  // Indexed by combo - 1, clamped to the last entry.
+  const comboGarbage = scoring?.comboGarbage ?? [0, 0, 1, 1, 2, 2, 3, 4];
+  const rule = { ...DEFAULT_RULES, ...rules };
+  const random = rng ?? Math.random;
 
   const board = createBoard(cols, rows);
   const emitter = createEmitter();
@@ -43,12 +66,20 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
     // clearing. Carried on the `lineclear` event so presentation layers can
     // react to a run without tracking state of their own.
     combo: 0,
+    // Junk rows sent by the opponent that have not landed yet. They are
+    // applied after the next lock resolves, so a piece already in flight is
+    // never yanked out from under the player.
+    pendingGarbage: 0,
+    // How many times the bottom row has been sacrificed (No Brainer only).
+    rescues: 0,
     on: emitter.on,
   };
 
   let gravityTimer = 0;
   let lockTimer = 0;
   let grounded = false;
+  // Level layout the map mode wants restored on every reset().
+  let startPattern = null;
 
   function cellsOf(piece) {
     return ROTATIONS[piece.type][piece.rot];
@@ -58,13 +89,35 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
     while (game.queue.length < 3) game.queue.push(bag.next());
   }
 
+  // The ceiling has been reached. Under 'gameover' that is the end; under
+  // 'rescue' the bottom row is sacrificed instead and play continues.
+  // Returns true if the game survived.
+  function topOut() {
+    if (rule.topOut !== 'rescue') {
+      endGame();
+      return false;
+    }
+    const cells = board.dropBottomRow();
+    game.rescues += 1;
+    emitter.emit('rescue', { cells, rescues: game.rescues });
+    return true;
+  }
+
   function spawn(type) {
     const { x, y } = spawnPosition(type, cols);
-    const piece = { type, rot: 0, x, y };
-    if (board.collides(cellsOf(piece), x, y)) {
+    let piece = { type, rot: 0, x, y };
+    // Rescuing frees one row at a time, so a deeply buried spawn may need
+    // several. Bounded by the board height: an empty board always has room,
+    // so this can only run out of attempts if something is badly wrong —
+    // end the game rather than spin.
+    for (let attempt = 0; board.collides(cellsOf(piece), piece.x, piece.y); attempt++) {
       game.piece = piece; // leave it visible where it jammed
-      endGame();
-      return;
+      if (attempt >= rows) {
+        endGame();
+        return;
+      }
+      if (!topOut()) return;
+      piece = { type, rot: 0, x, y };
     }
     game.piece = piece;
     gravityTimer = 0;
@@ -98,9 +151,18 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
     return board.collides(cellsOf(p), p.x, p.y + 1);
   }
 
+  // Junk rows earned by one lock: a single clear sends nothing, and a long
+  // combo run eventually matches the clear itself. Kept here rather than in
+  // the versus wiring so the number is testable without a second player.
+  function garbageFor(count, combo) {
+    const base = garbageTable[count] ?? 0;
+    const i = Math.min(Math.max(combo, 1), comboGarbage.length) - 1;
+    return base + comboGarbage[i];
+  }
+
   function lockPiece() {
     const p = game.piece;
-    const topOut = board.merge(cellsOf(p), p.x, p.y, p.type);
+    const overCeiling = board.merge(cellsOf(p), p.x, p.y, p.type);
     emitter.emit('lock', { piece: { ...p } });
     game.canHold = true;
 
@@ -120,14 +182,35 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
         emitter.emit('levelup', { level: newLevel });
       }
       emitter.emit('lineclear', { rows: full, count: full.length, cells, combo: game.combo });
+
+      if (rule.sendsGarbage) {
+        // Clearing lines cancels incoming junk before any is forwarded — the
+        // standard versus rule, and the reason attacking is also a defence.
+        let outgoing = garbageFor(full.length, game.combo);
+        const cancelled = Math.min(game.pendingGarbage, outgoing);
+        game.pendingGarbage -= cancelled;
+        outgoing -= cancelled;
+        if (outgoing > 0) emitter.emit('garbage', { lines: outgoing, combo: game.combo });
+      }
     } else {
       game.combo = 0;
     }
 
-    if (topOut) {
-      endGame();
-      return;
+    if (overCeiling) {
+      if (!topOut()) return;
     }
+
+    if (game.pendingGarbage > 0) {
+      const lines = game.pendingGarbage;
+      game.pendingGarbage = 0;
+      // One hole per delivery, not per row: a stack of junk with a single
+      // column open is dug out with one well-placed piece, which is what
+      // makes a big hit recoverable.
+      const buried = board.pushGarbage(lines, Math.floor(random() * cols), GARBAGE);
+      emitter.emit('garbagelanded', { lines });
+      if (buried && !topOut()) return;
+    }
+
     spawnNext();
   }
 
@@ -154,7 +237,7 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
         lockTimer = 0;
       }
       gravityTimer += dt;
-      const step = gravityFn(game.level);
+      const step = gravityFn(game.level) * rule.gravityScale;
       while (gravityTimer >= step) {
         gravityTimer -= step;
         if (!tryMove(0, 1)) break;
@@ -223,8 +306,38 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
       if (game.state === STATE.PLAYING) game.state = STATE.PAUSED;
       else if (game.state === STATE.PAUSED) game.state = STATE.PLAYING;
     },
+    // Change a rule mid-run. The map mode uses it to wind the gravity up
+    // level by level without rebuilding the game.
+    setRules(partial) {
+      Object.assign(rule, partial);
+    },
+    // Junk queued by the opponent. It lands after the next lock, so the
+    // player always gets to finish the piece they are holding.
+    receiveGarbage(lines) {
+      if (game.state !== STATE.PLAYING) return;
+      game.pendingGarbage += lines;
+    },
+    // The map mode's level layout. Remembered so restarting a level (R) or
+    // reset() puts the same junk back rather than starting empty.
+    loadPattern(pattern) {
+      startPattern = pattern ?? null;
+      board.reset();
+      if (startPattern) board.applyPattern(startPattern, GARBAGE);
+    },
+    // Junk cells still on the board — the map mode's win condition is that
+    // this reaches zero.
+    garbageLeft() {
+      return board.countType(GARBAGE);
+    },
+    // Ends the run from outside the core (a versus timer running out, the
+    // opponent being knocked out). Never fires twice.
+    finish() {
+      if (game.state === STATE.GAME_OVER) return;
+      endGame();
+    },
     reset() {
       board.reset();
+      if (startPattern) board.applyPattern(startPattern, GARBAGE);
       bag = createBag(rng);
       game.queue = [];
       game.holdType = null;
@@ -233,6 +346,8 @@ export function createGame({ board: boardCfg, timing, scoring, gravityMs, rng } 
       game.lines = 0;
       game.level = 1;
       game.combo = 0;
+      game.pendingGarbage = 0;
+      game.rescues = 0;
       game.state = STATE.PLAYING;
       spawnNext();
     },

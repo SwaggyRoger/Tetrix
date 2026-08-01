@@ -9,7 +9,18 @@
 // Files are loaded through <audio> elements rather than fetch + decodeAudioData
 // because fetch is blocked on file://, where the double-clickable index.html runs.
 
-export const AUDIO_CUES = ['lock', 'hardDrop', 'clear1', 'clear2', 'clear3', 'clear4', 'levelUp', 'gameOver'];
+export const AUDIO_CUES = [
+  'lock',
+  'hardDrop',
+  'clear1',
+  'clear2',
+  'clear3',
+  'clear4',
+  'rescue',
+  'garbage',
+  'levelUp',
+  'gameOver',
+];
 
 export const AUDIO_MANIFEST_VERSION = 1;
 

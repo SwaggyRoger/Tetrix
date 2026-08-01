@@ -29,6 +29,8 @@ const MODULES = [
   'core/bag.js',
   'core/board.js',
   'core/game.js',
+  'core/modes.js',
+  'core/match.js',
   'config.js',
   'assets/loader.js',
   'audio/synth.js',
@@ -40,6 +42,7 @@ const MODULES = [
   'effects/particles.js',
   'input/keyboard.js',
   'ui/hud.js',
+  'ui/menu.js',
 ];
 
 function bundleModule(relPath) {

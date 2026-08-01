@@ -102,6 +102,14 @@ export function createSound({ cfg, synth, samples = {}, storage = globalThis.loc
         synth.chord(cfg.combo.sparkle, { semitoneShift: lift.semitoneShift });
       }
     },
+    // The No Brainer bottom-row sacrifice.
+    onRescue() {
+      cue('rescue', cfg.rescue);
+    },
+    // Junk arriving from the versus opponent.
+    onGarbage() {
+      cue('garbage', cfg.garbage);
+    },
     onLevelUp() {
       cue('levelUp', cfg.levelUp);
     },

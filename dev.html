@@ -12,58 +12,78 @@
 <body>
   <canvas id="background"></canvas>
 
-  <main class="frame">
-    <aside class="side">
-      <section class="panel">
-        <h2>Hold</h2>
-        <canvas id="hold"></canvas>
-      </section>
-      <section class="panel controls">
-        <h2>Controls</h2>
-        <dl>
-          <dt>← →</dt><dd>Move 移動</dd>
-          <dt>↑ / X</dt><dd>Rotate 旋轉</dd>
-          <dt>Z</dt><dd>Rotate ↺</dd>
-          <dt>↓</dt><dd>Soft drop 緩降</dd>
-          <dt>Space</dt><dd>Hard drop 直落</dd>
-          <dt>C</dt><dd>Hold 保留</dd>
-          <dt>P</dt><dd>Pause 暫停</dd>
-          <dt>R</dt><dd>Restart 重來</dd>
-          <dt>M</dt><dd>Mute 靜音</dd>
-          <dt>Enter</dt><dd>Start 開始</dd>
-        </dl>
-      </section>
-    </aside>
+  <header class="masthead">
+    <h1>Tetrix</h1>
+    <p class="subtitle">an impressionist tetris</p>
+  </header>
 
-    <section class="stage">
-      <h1>Tetrix</h1>
-      <p class="subtitle">an impressionist tetris</p>
-      <div class="board-wrap">
-        <canvas id="board"></canvas>
-        <canvas id="effects"></canvas>
-        <div id="overlay" class="overlay hidden"></div>
+  <!-- One player's whole column. main.js stamps this once for a solo game and
+       twice for versus, so the two boards can never drift apart. -->
+  <template id="player-template">
+    <section class="player">
+      <aside class="side">
+        <section class="panel">
+          <h2>Hold</h2>
+          <canvas data-canvas="hold"></canvas>
+        </section>
+        <section class="panel controls" data-controls="1">
+          <h2>Controls</h2>
+          <dl>
+            <dt>← →</dt><dd>Move 移動</dd>
+            <dt>↑ / X</dt><dd>Rotate 旋轉</dd>
+            <dt>Z / /</dt><dd>Rotate ↺</dd>
+            <dt>↓</dt><dd>Soft drop 緩降</dd>
+            <dt>Space</dt><dd>Hard drop 直落</dd>
+            <dt>C / Shift</dt><dd>Hold 保留</dd>
+            <dt>P</dt><dd>Pause 暫停</dd>
+            <dt>R</dt><dd>Restart 重來</dd>
+            <dt>M</dt><dd>Mute 靜音</dd>
+          </dl>
+        </section>
+        <section class="panel controls" data-controls="2">
+          <h2>Controls</h2>
+          <dl>
+            <dt>A D</dt><dd>Move 移動</dd>
+            <dt>E</dt><dd>Rotate 旋轉</dd>
+            <dt>Q</dt><dd>Rotate ↺</dd>
+            <dt>S</dt><dd>Soft drop 緩降</dd>
+            <dt>W</dt><dd>Hard drop 直落</dd>
+            <dt>F</dt><dd>Hold 保留</dd>
+          </dl>
+        </section>
+      </aside>
+
+      <div class="board-column">
+        <p class="player-label" data-label></p>
+        <div class="board-wrap">
+          <canvas data-canvas="board"></canvas>
+          <canvas data-canvas="effects"></canvas>
+          <div class="overlay hidden" data-overlay></div>
+        </div>
       </div>
-    </section>
 
-    <aside class="side">
-      <section class="panel">
-        <h2>Next</h2>
-        <canvas id="next"></canvas>
-      </section>
-      <section class="panel stats">
-        <h2>Score</h2>
-        <p class="stat" id="stat-score">0</p>
-        <h2>Level</h2>
-        <p class="stat" id="stat-level">1</p>
-        <h2>Lines</h2>
-        <p class="stat" id="stat-lines">0</p>
-        <h2>Best</h2>
-        <p class="stat" id="stat-high">0</p>
-        <h2>Sound</h2>
-        <p class="stat" id="stat-sound">On</p>
-      </section>
-    </aside>
-  </main>
+      <aside class="side">
+        <section class="panel">
+          <h2>Next</h2>
+          <canvas data-canvas="next"></canvas>
+        </section>
+        <section class="panel stats">
+          <div data-row><h2>Score</h2><p class="stat" data-stat="score">0</p></div>
+          <div data-row><h2>Level</h2><p class="stat" data-stat="level">1</p></div>
+          <div data-row><h2>Lines</h2><p class="stat" data-stat="lines">0</p></div>
+          <div data-row hidden><h2>Combo</h2><p class="stat" data-stat="combo">—</p></div>
+          <div data-row hidden><h2>Stone 石塊</h2><p class="stat" data-stat="objective">0</p></div>
+          <div data-row hidden><h2>Time</h2><p class="stat" data-stat="timer">2:00</p></div>
+          <div data-row><h2>Best</h2><p class="stat" data-stat="high">0</p></div>
+          <div data-row><h2>Sound</h2><p class="stat" data-stat="sound">On</p></div>
+        </section>
+      </aside>
+    </section>
+  </template>
+
+  <main class="frame" id="frame"></main>
+
+  <div id="menu" class="menu hidden"></div>
 
   <!-- Optional custom artwork. Plain (non-module) script so it works from
        file:// in the generated index.html too — see assets/README.md. -->
